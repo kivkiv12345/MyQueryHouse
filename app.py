@@ -1,15 +1,17 @@
-import tkinter as tk
-from tkinter.scrolledtext import ScrolledText
-from typing import Callable
-
-from frozendict import frozendict
-
-from keymodes import KeyModes
-from multiprocessing import Process
-from mysql import connector
-from utils import *
-
-root_title = "MyQueryHouse | MySQL Connector Program"
+try:
+    import tkinter as tk
+    from tkinter.scrolledtext import ScrolledText
+    from typing import Callable
+    from frozendict import frozendict
+    from mysql.connector import ProgrammingError
+    from enums import KeyModes
+    from multiprocessing import Process
+    from mysql import connector
+    from utils import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
+except ModuleNotFoundError as e:
+    raise SystemExit(f"٩(^‿^)۶ Hey there, some import failed; stating: '{e}'.\nThis most likely happened because you "
+                     f"aren't running the program from the intended virtual environment.\n"
+                     f"Please navigate to the directory of app.py and execute 'source env/bin/activate'. :)")
 
 def m1click(event, mode:KeyModes=None):
     print(f"Clicked mouse1 using {mode} as mode.")
@@ -24,16 +26,6 @@ def runtk(tk:tk.Tk):
     tk.mainloop()
 
 
-def db_click(db_name: str):
-    """ Runs when clicking a database in the object explorer. """
-    root.title(root_title + f" | {db_name}")
-    db_cursor.execute(f"USE {db_name}")
-
-    """db_cursor.execute("SHOW TABLES")
-    test = [i for i in db_cursor]
-    print(test)"""
-
-
 def bind_modifiers(widget, event:Callable, button='Button-1',
                    modes=frozendict({'Shift': KeyModes.SHIFT, 'Control': KeyModes.CONTROL, 'Alt': KeyModes.ALT, })):
     """ Creates modifier bindings (ALT, CONTROL & SHIFT, by default) for the provided widget. """
@@ -45,38 +37,38 @@ def bind_modifiers(widget, event:Callable, button='Button-1',
 
 
 if __name__ == '__main__':
-    root = tk.Tk()
-    root.geometry("500x500")
-    root.configure(bg="gray")
-    root.title(root_title)
+    should_loop = True
 
-    #root.bind("<Button 1>", m1click)
-    root.bind("<Button 3>", m2click)
+    while should_loop:
+        # Login screen loop.
+        login = LoginBox()
+        while True:
+            login.mainloop()
+            try:
+                # Use the login details stored in our login widget for the MySQL connection.
+                db_connection = connector.connect(**login.logindeets)
+                break
+            except ProgrammingError as e:
+                login = LoginBox(e.msg)
 
-    # Bind some event modifiers, these alter the behavior when clicking the mouse.
-    #root.bind('<Shift-Button-1>', lambda event: m1click(event, KeyModes.SHIFT))
-    #root.bind('<Control-Button-1>', lambda event: m1click(event, KeyModes.CONTROL))
-    #root.bind('<Alt-Button-1>', lambda event: m1click(event, KeyModes.ALT))
+        db_cursor = db_connection.cursor()
 
-    bind_modifiers(root, m1click)
+        try:  # Prompt the user to create the database, should it be absent.
+            db_cursor.execute(f"USE {DATABASE_NAME}")
+        except ProgrammingError:
+            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, db_cursor, db_connection)
+            newdbmsg.mainloop()
 
-    # TODO Kevin: Create a login screen
-    db_connection = connector.connect(host="localhost", user="root", passwd="Test1234!")
+        root = MainDBView(DATABASE_NAME, db_cursor, db_connection)
 
-    db_cursor = db_connection.cursor()
-    db_cursor.execute("SHOW DATABASES")
+        #root.bind("<Button 1>", m1click)
+        root.bind("<Button 3>", m2click)
 
-    db_scrollview = VerticalScrolledFrame(root)
-    db_scrollview.grid(column=0)
+        # Bind some event modifiers, these alter the behavior when clicking the mouse.
+        bind_modifiers(root, m1click)
 
-    db_names = (db[0] for db in db_cursor)
-    for name in db_names:
-        btn = tk.Button(db_scrollview.interior, height=1, width=20, relief=tk.FLAT,
-                        bg="gray99", fg="black", text=name,
-                        command=lambda db_name=name: db_click(db_name))
-        btn.pack(padx=10, pady=5, side=tk.TOP)
-
-    root.mainloop()
+        root.mainloop()
+        should_loop = root.restart_program
 
     #root2 = tk.Tk()
     #root2.title("hahahtest")
