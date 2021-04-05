@@ -1,27 +1,29 @@
 """
 This module holds the utility methods and classes used in the application.
 """
+from mysql.connector import ProgrammingError
 
 if __name__ == '__main__':
     # Gently remind the user to not run utils.py themselves
     raise SystemExit("(⊙＿⊙') Wha!?... Are you trying to run utils.py?\n"
                      " You do know it's only used to store utilities; right? You should run app.py instead :)")
 
-import pathlib
 import tkinter as tk
+from pathlib import Path
 from typing import TypeVar
-
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
-from json import load
+from subprocess import DEVNULL, call
+from tkintertable import TableCanvas, TableModel
 
 
 # VARS
-PathLike = TypeVar("PathLike", str, pathlib.Path, None)
-DB_DATA_FILE:PathLike = 'db_data.json'
+PathLike = TypeVar("PathLike", str, Path, None)
+DB_DATA_FILE: PathLike = 'db_data.json'
 
 root_title = "MyQueryHouse | MySQL Connector Program"
 DATABASE_NAME = "myqueryhouse"
+
 
 # Classes
 class TkUtilWidget(tk.Tk):
@@ -29,7 +31,7 @@ class TkUtilWidget(tk.Tk):
 
     def destroy(self, deliberate=False):
         """
-        Calls super and allows for discrimination based on context.
+        Calls super and allows for discrimination based on context. Allows the program to continue to its next phase.
         :param deliberate: True when the program should continue when this function is called.
         """
         super().destroy()
@@ -77,6 +79,7 @@ class LoginBox(TkUtilWidget):
         tk.Label(self, text="Connection password").pack()
         self.password_input = tk.Entry(self, show="*")
         self.password_input.pack()
+        self.password_input.focus_set()
 
         tk.Button(self, text='Confirm settings', command=self._confirm).pack()
 
@@ -95,30 +98,35 @@ class CreateDatabaseMessage(TkUtilWidget):
     db_name: str = None
     db_cursor: CMySQLCursor = None
     db_connection: MySQLConnection = None
+    db_password:str = None
 
     def _confirm(self, *args):
-        # TODO Kevin: This is a pretty terrible way to populate the database, one ought to restore from a backup file instead.
-        self.db_cursor.execute(f"CREATE DATABASE {self.db_name}")  # Apparently can't pass db_name as a positional argument when creating a database ¯\_(ツ)_/¯
-        self.db_cursor.execute(f"USE {self.db_name}")
+        try:
+            try: self.db_cursor.execute(f"CREATE DATABASE {self.db_name}")  # Apparently can't pass db_name as a positional argument when creating a database ¯\_(ツ)_/¯
+            except ProgrammingError: pass  # The database probably already exists, which is fine by us (unless we want to wipe it first).
 
-        self.db_cursor.execute("CREATE TABLE Location (shelf smallint UNSIGNED, space smallint UNSIGNED, locationID int PRIMARY KEY AUTO_INCREMENT)")
-        self.db_cursor.execute("CREATE TABLE Item (productname varchar(50), description varchar(400), itemID int PRIMARY KEY AUTO_INCREMENT)")
+            self.db_cursor.execute(f"USE {self.db_name}")
 
-        if self.populate_db.get():
-            with open(DB_DATA_FILE) as json_file:
-                db_data = load(json_file)
-                for table_string, rows in db_data.items():
-                    for row in rows:
-                        self.db_cursor.execute(f"INSERT INTO {table_string} VALUES (%s,%s)", row)
-
-        self.db_connection.commit()
+            if self.populate_db.get():
+                # Run a command which will load the contents of a .sql file into an existing database.
+                # This seems to be the best we can do for now; ideally we would create it as well.
+                call(["mysql", "-u", "root", f"--password={self.db_password}", DATABASE_NAME], stdin=open(f"{DATABASE_NAME}.sql"), stdout=DEVNULL, stderr=DEVNULL)
+            else:
+                # TODO Kevin: Perhaps automate creation of needed tables?
+                # Create the tables needed by the program.
+                self.db_cursor.execute("CREATE TABLE Location (shelf smallint UNSIGNED, space smallint UNSIGNED, locationID int PRIMARY KEY AUTO_INCREMENT)")
+                self.db_cursor.execute("CREATE TABLE Item (productname varchar(50), description varchar(400), itemID int PRIMARY KEY AUTO_INCREMENT)")
+                # TODO Kevin: commit may be needed.
+                #self.db_connection.commit()
+        except ProgrammingError as e:
+            print(f"Failed to restore database from {DATABASE_NAME}.sql; stating: '{e}',\ndoes the file exist?")
 
         self.destroy(True)
 
-    def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
+    def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, db_password:str, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
 
-        self.db_name, self.db_cursor, self.db_connection = db_name, db_cursor, db_connection
+        self.db_name, self.db_cursor, self.db_connection, self.db_password = db_name, db_cursor, db_connection, db_password
 
         self.title(f"Create database {db_name}")
         tk.Label(self, text=f"A database called '{db_name}' could not be found on the server,\n"
@@ -186,9 +194,10 @@ class MainDBView(tk.Tk):
     db_cursor: CMySQLCursor = None
     db_connection: MySQLConnection = None
 
-    rowbox: tk.Text = None
+    rowframe: tk.Frame = None
+    rowtable: TableCanvas = None
 
-    restart_program = False
+    restart_program = False  # Used by the program loop in app.py
 
     def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
@@ -197,7 +206,7 @@ class MainDBView(tk.Tk):
 
         self.title(root_title)
 
-        self.geometry("500x500")
+        self.geometry("1000x500")
         #self.configure(bg="gray")
 
         db_scrollview = VerticalScrolledFrame(self)
@@ -215,20 +224,24 @@ class MainDBView(tk.Tk):
 
         tk.Button(self, text=f"Delete {self.db_name}", command=self._delete_database).grid(column=0)
 
-        self.rowbox = tk.Text()
-        tk.Text(self).grid(column=2, row=1)
+        data = {'rec1': {'col1': 99.88, 'col2': 108.79, 'label': 'rec1'},
+                'rec2': {'col1': 99.88, 'col2': 108.79, 'label': 'rec2'}
+                }
+
+        self.rowframe = tk.Frame(self)
+        self.rowframe.grid(column=2, row=1)
+        self.rowtable = TableCanvas(self.rowframe, data=data)
+        self.rowtable.show()
 
     def _table_click(self, table_name: str):
+        """ Runs when clicking any table button. """
         self.title(f"{root_title} | {table_name}")
 
         self.db_cursor.execute(f"SELECT * FROM {table_name}")
         print(tuple(i for i in self.db_cursor))
 
-        """self.db_cursor.execute("SHOW TABLES")
-        test = [i for i in self.db_cursor]
-        print(test)"""
-
     def _delete_database(self):
+        """ Runs when clicking the delete database button. """
         self.db_cursor.execute(f"DROP DATABASE {self.db_name}")
         self.restart_program = True
         self.destroy()

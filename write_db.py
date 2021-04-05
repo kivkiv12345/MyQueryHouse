@@ -7,7 +7,7 @@ if __name__ == '__main__':
 
     db_dict = {  # Filler data goes here:
         'Location (shelf, space)':
-            ((3,5), (3,6), (6,8), (9,3), (8,3)),
+            tuple((n, i) for n in range(1, 11) for i in range(1, 11)),
         'Item (productname, description)':
             (('testproduct1', 'does some tests and stuff'), ('alsotestproduct', 'amazing')),
     }

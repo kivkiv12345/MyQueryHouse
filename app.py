@@ -56,7 +56,7 @@ if __name__ == '__main__':
         try:  # Prompt the user to create the database, should it be absent.
             db_cursor.execute(f"USE {DATABASE_NAME}")
         except ProgrammingError:
-            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, db_cursor, db_connection)
+            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, db_cursor, db_connection, login.logindeets["passwd"])
             newdbmsg.mainloop()
 
         root = MainDBView(DATABASE_NAME, db_cursor, db_connection)
