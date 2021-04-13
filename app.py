@@ -8,6 +8,8 @@ try:
     from multiprocessing import Process
     from mysql import connector
     from utils import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
+    from orm import CONNECTION, CURSOR
+    from multiprocessing import Process
 except ModuleNotFoundError as e:
     raise SystemExit(f"٩(^‿^)۶ Hey there, some import failed; stating: '{e}'.\nThis most likely happened because you "
                      f"aren't running the program from the intended virtual environment.\n"
@@ -37,38 +39,36 @@ def bind_modifiers(widget, event:Callable, button='Button-1',
 
 
 if __name__ == '__main__':
-    should_loop = True
 
-    while should_loop:
+    while True:
         # Login screen loop.
         login = LoginBox()
         while True:
             login.mainloop()
             try:
                 # Use the login details stored in our login widget for the MySQL connection.
-                db_connection = connector.connect(**login.logindeets)
+                CONNECTION = connector.connect(**login.logindeets)
                 break
             except ProgrammingError as e:
                 login = LoginBox(e.msg)
 
-        db_cursor = db_connection.cursor()
+        CURSOR = CONNECTION.cursor()
 
         try:  # Prompt the user to create the database, should it be absent.
-            db_cursor.execute(f"USE {DATABASE_NAME}")
-        except ProgrammingError:
-            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, db_cursor, db_connection, login.logindeets["passwd"])
+            CURSOR.execute(f"USE {DATABASE_NAME}")
+        except ProgrammingError:  # Assume the database to not exist, if we cannot use it.
+            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, CURSOR, CONNECTION, login.logindeets["passwd"])
             newdbmsg.mainloop()
 
-        root = MainDBView(DATABASE_NAME, db_cursor, db_connection)
+        root = MainDBView(DATABASE_NAME, CURSOR, CONNECTION)
 
         #root.bind("<Button 1>", m1click)
-        root.bind("<Button 3>", m2click)
+        #root.bind("<Button 3>", m2click)
 
         # Bind some event modifiers, these alter the behavior when clicking the mouse.
-        bind_modifiers(root, m1click)
+        #bind_modifiers(root, m1click)
 
         root.mainloop()
-        should_loop = root.restart_program
 
     #root2 = tk.Tk()
     #root2.title("hahahtest")

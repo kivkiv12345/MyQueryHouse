@@ -1,7 +1,6 @@
 """
-This module holds the utility methods and classes used in the application.
+This module holds the utility methods and classes used by MyQueryHouse.
 """
-from mysql.connector import ProgrammingError
 
 if __name__ == '__main__':
     # Gently remind the user to not run utils.py themselves
@@ -10,11 +9,17 @@ if __name__ == '__main__':
 
 import tkinter as tk
 from pathlib import Path
-from typing import TypeVar
+from typing import TypeVar, Set, Dict, Tuple
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
 from subprocess import DEVNULL, call
 from tkintertable import TableCanvas, TableModel
+from frozendict import frozendict
+from copy import deepcopy
+from mysql.connector import ProgrammingError
+from orm import TABLE_EXCLUSION, TABLE_KEYS
+from datetime import datetime
+from tkinter.messagebox import askyesno
 
 
 # VARS
@@ -22,7 +27,7 @@ PathLike = TypeVar("PathLike", str, Path, None)
 DB_DATA_FILE: PathLike = 'db_data.json'
 
 root_title = "MyQueryHouse | MySQL Connector Program"
-DATABASE_NAME = "myqueryhouse"
+DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoration file!
 
 
 # Classes
@@ -31,11 +36,15 @@ class TkUtilWidget(tk.Tk):
 
     def destroy(self, deliberate=False):
         """
-        Calls super and allows for discrimination based on context. Allows the program to continue to its next phase.
+        Calls super and allows the program to continue to its next phase, based on context.
         :param deliberate: True when the program should continue when this function is called.
         """
         super().destroy()
-        if not deliberate: raise SystemExit(f"{object.__str__(self)} wishes to stop the Tkinter application.")
+        if not deliberate: raise SystemExit(f"{self}, wishes to stop the Tkinter application.")
+
+    def __str__(self):
+        """ Prevent Tkinter from displaying the name as . """
+        return object.__str__(self)
 
 
 class LoginBox(TkUtilWidget):
@@ -114,8 +123,20 @@ class CreateDatabaseMessage(TkUtilWidget):
             else:
                 # TODO Kevin: Perhaps automate creation of needed tables?
                 # Create the tables needed by the program.
-                self.db_cursor.execute("CREATE TABLE Location (shelf smallint UNSIGNED, space smallint UNSIGNED, locationID int PRIMARY KEY AUTO_INCREMENT)")
-                self.db_cursor.execute("CREATE TABLE Item (productname varchar(50), description varchar(400), itemID int PRIMARY KEY AUTO_INCREMENT)")
+                self.db_cursor.execute("""CREATE TABLE Items (
+                                            productname varchar(50) NOT NULL, 
+                                            description varchar(400), 
+                                            itemID int PRIMARY KEY AUTO_INCREMENT NOT NULL
+                                        )""")
+                self.db_cursor.execute("""CREATE TABLE Locations (
+                                            shelf smallint UNSIGNED NOT NULL, 
+                                            space smallint UNSIGNED NOT NULL, 
+                                            locationID int PRIMARY KEY AUTO_INCREMENT NOT NULL,
+                                            itemID INT,
+                                            FOREIGN KEY (itemID) 
+                                                REFERENCES Items(itemID)
+                                                ON DELETE SET NULL
+                                        )""")
                 # TODO Kevin: commit may be needed.
                 #self.db_connection.commit()
         except ProgrammingError as e:
@@ -133,7 +154,7 @@ class CreateDatabaseMessage(TkUtilWidget):
                             f"This database must be created before the program can continue.\n").pack()
 
         self.populate_db = tk.BooleanVar()
-        self.pop_db_checkbox = tk.Checkbutton(self, text=f"Should the database be prepopulated with filler data?\nContents will be read from '{DB_DATA_FILE}'", variable=self.populate_db)
+        self.pop_db_checkbox = tk.Checkbutton(self, text=f"Should the database be prepopulated with filler data?\nContents will be read from '{db_name}.sql'", variable=self.populate_db)
         self.pop_db_checkbox.select()
         self.pop_db_checkbox.pack()
 
@@ -186,7 +207,7 @@ class VerticalScrolledFrame(tk.Frame):  # Shamelessly stolen from: https://stack
         canvas.bind('<Configure>', _configure_canvas)
 
 
-class MainDBView(tk.Tk):
+class MainDBView(TkUtilWidget):
     """ This is the main widget that will be shown when a successful connection to the database has been made. """
 
     # Database connection details.
@@ -197,7 +218,10 @@ class MainDBView(tk.Tk):
     rowframe: tk.Frame = None
     rowtable: TableCanvas = None
 
-    restart_program = False  # Used by the program loop in app.py
+    table_name: str = None  # Currently selected table is stored here for ease of access
+
+    primary_keys: Set[int] = None  # Used to calculate the deleted rows in the shown table.
+    initial_data = None  # Used to compare which rows needs to be updated in the database.
 
     def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
@@ -223,26 +247,85 @@ class MainDBView(tk.Tk):
             btn.pack(padx=10, pady=5, side=tk.TOP)
 
         tk.Button(self, text=f"Delete {self.db_name}", command=self._delete_database).grid(column=0)
+        tk.Button(self, text=f"Commit to {self.db_name}", command=self._save).grid(column=0)
+        tk.Button(self, text=f"Log out", command=self._log_out).grid(column=0)
 
-        data = {'rec1': {'col1': 99.88, 'col2': 108.79, 'label': 'rec1'},
-                'rec2': {'col1': 99.88, 'col2': 108.79, 'label': 'rec2'}
-                }
+        self.tablemodel = TableModel()
 
         self.rowframe = tk.Frame(self)
         self.rowframe.grid(column=2, row=1)
-        self.rowtable = TableCanvas(self.rowframe, data=data)
+        self.rowtable = TableCanvas(self.rowframe)
         self.rowtable.show()
 
     def _table_click(self, table_name: str):
         """ Runs when clicking any table button. """
         self.title(f"{root_title} | {table_name}")
+        self.table_name = table_name
+        self.db_cursor.execute(f"SHOW COLUMNS FROM {table_name}")
+        columnnames = [columntuple[0] for columntuple in self.db_cursor]
 
         self.db_cursor.execute(f"SELECT * FROM {table_name}")
-        print(tuple(i for i in self.db_cursor))
+
+        # TODO Kevin: data breaks with empty database.
+        #data = {f"row{i}": {name: value for name, value in zip(columnnames, data) if name not in TABLE_EXCLUSION[self.table_name]} for i, data in enumerate(self.db_cursor)}
+        data = {
+            next(fieldlist[index] for index, name in enumerate(columnnames) if name == TABLE_KEYS[self.table_name]):
+                {name: value for name, value in zip(columnnames, fieldlist) if name not in TABLE_EXCLUSION[self.table_name]}
+            for fieldlist in self.db_cursor
+        }
+        #data = {dict(zip(columnnames, fieldlist))[TABLE_KEYS[self.table_name]]: dict(zip(columnnames, fieldlist)) for fieldlist in self.db_cursor}
+        """
+        data will be in the same format as this example taken from the tkinter docs.
+        {
+            'rec1': {'col1': 99.88, 'col2': 108.79, 'label': 'rec1'},
+            'rec2': {'col1': 99.88, 'col2': 108.79, 'label': 'rec2'}
+        }
+        """
+
+        self.rowtable.destroy()  # Reinstating the table seems to work best.
+        self.rowtable = TableCanvas(self.rowframe, data=data)
+        self.rowtable.show()
+        self.rowtable.autoResizeColumns()
+        model = self.rowtable.getModel()
+        self.primary_keys = set(model.reclist)
+        self.initial_data = frozendict(deepcopy(model.data))
 
     def _delete_database(self):
         """ Runs when clicking the delete database button. """
-        self.db_cursor.execute(f"DROP DATABASE {self.db_name}")
-        self.restart_program = True
-        self.destroy()
+        if askyesno(f"delete '{self.db_name}'?", f"Are you sure you want to delete '{self.db_name}' from the server?"):
+            self.db_cursor.execute(f"DROP DATABASE {self.db_name}")
+            self.destroy(True)
+
+    def _save(self):
+        """ Writes written changes to the database. """
+        model = self.rowtable.getModel()
+
+        # Read how the rows in the table have changed, and use the corresponding queries further on.
+        deleted_rows = self.primary_keys.difference(set(model.reclist))
+        new_rows: Tuple[Dict[str, str], ...] = *(row for pk, row in model.data.items() if pk not in self.primary_keys),
+        update_rows = {pk: {column: value for column, value in data.items() if value != self.initial_data[pk][column]} for pk, data in model.data.items() if pk in self.primary_keys and data != self.initial_data[pk]}
+
+        # TODO Kevin: Simultaneous deletions and additions override each others primary keys.
+        if deleted_rows:  # Perform a single query which drops all the desired rows.
+            self.db_cursor.execute(f"DELETE FROM {self.table_name} WHERE {TABLE_KEYS[self.table_name]} IN ({', '.join(str(i) for i in deleted_rows)})")
+        if new_rows:  # Perform a single query which inserts all the desired rows.
+            columnnames = list(new_rows[0].keys())  # Column names should be the same for all rows.
+            values = ', '.join("('" + "', '".join(row.values()) + "')" for row in new_rows)
+            self.db_cursor.execute(f"INSERT INTO {self.table_name}({', '.join(columnnames)}) VALUES {values}")
+        if update_rows:
+            for pk, data in update_rows.items():
+                values = str(tuple(f"{column} = |||{value}|||" for column, value in data.items()))[1:-2].replace(r"'", '').replace('|||', r"'")
+                self.db_cursor.execute(f"UPDATE {self.table_name} SET {values} WHERE {TABLE_KEYS[self.table_name]} = {pk}")
+
+        self.db_connection.commit()
+        changecount = len(deleted_rows) + len(new_rows) + len(update_rows)
+        print(f"committed {changecount} change{'s' if changecount != 1 else ''} to {self.db_name}, at {datetime.now()}.")
+        self._table_click(self.table_name)  # Temporary solution to reset stored primary keys.
+
+    def _log_out(self):
+        """ Creates a window which prompts the user as to if they want to log out. """
+        if askyesno(title='Log out?', message='Are you sure you want to log out?'): self.destroy(True)
+
+    def __str__(self): return f"Table of {self.table_name}"
+
 
