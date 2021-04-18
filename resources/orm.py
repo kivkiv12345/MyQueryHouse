@@ -14,6 +14,7 @@ from mysql.connector.cursor_cext import CMySQLCursor
 CONNECTION: MySQLConnection = None
 CURSOR: CMySQLCursor = None
 
+"""
 TABLE_EXCLUSION = {
     'Items': {'itemID', },
     'Locations': {'locationID', },
@@ -21,6 +22,9 @@ TABLE_EXCLUSION = {
 
 TABLE_KEYS = {'Items': 'itemID',
               'Locations': 'locationID'}
+"""
+
+PK_IDENTIFIER = "ID"  # Should reflect how table primary keys are suffixed in the database.
 
 
 class QuerySet:

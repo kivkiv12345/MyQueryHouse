@@ -4,16 +4,24 @@ try:
     from typing import Callable
     from frozendict import frozendict
     from mysql.connector import ProgrammingError
-    from enums import KeyModes
+    from resources.enums import KeyModes
     from multiprocessing import Process
     from mysql import connector
-    from utils import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
-    from orm import CONNECTION, CURSOR
-    from multiprocessing import Process
+    from resources.utils import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
+    from resources.orm import CONNECTION, CURSOR
 except ModuleNotFoundError as e:
-    raise SystemExit(f"٩(^‿^)۶ Hey there, some import failed; stating: '{e}'.\nThis most likely happened because you "
-                     f"aren't running the program from the intended virtual environment.\n"
-                     f"Please navigate to the directory of app.py and execute 'source env/bin/activate'. :)")
+    raise SystemExit(f"""
+    ٩(^‿^)۶ Hey there, some import failed; stating: '{e}'.\n
+    This most likely happened because you have missing dependencies. 
+    Assuming you're located in the directory of app.py,
+    this can easily be fixed by running:
+    'pip3 install -r requirements.txt'.\n
+    You might want to do this in virtual environment though, which can be made with:
+    'python3 -m venv env',\n
+    You must now activate it by typing:
+    'source env/bin/activate' :)
+    """)
+
 
 def m1click(event, mode:KeyModes=None):
     print(f"Clicked mouse1 using {mode} as mode.")
@@ -21,11 +29,6 @@ def m1click(event, mode:KeyModes=None):
 
 def m2click(event):
     pass
-
-
-def runtk(tk:tk.Tk):
-    """ Used to run a tkinter instance async. """
-    tk.mainloop()
 
 
 def bind_modifiers(widget, event:Callable, button='Button-1',
@@ -60,21 +63,12 @@ if __name__ == '__main__':
             newdbmsg = CreateDatabaseMessage(DATABASE_NAME, CURSOR, CONNECTION, login.logindeets["passwd"])
             newdbmsg.mainloop()
 
-        root = MainDBView(DATABASE_NAME, CURSOR, CONNECTION)
-
-        #root.bind("<Button 1>", m1click)
-        #root.bind("<Button 3>", m2click)
-
-        # Bind some event modifiers, these alter the behavior when clicking the mouse.
-        #bind_modifiers(root, m1click)
+        root = MainDBView(DATABASE_NAME, CURSOR, CONNECTION, login.logindeets["passwd"])
 
         root.mainloop()
 
-    #root2 = tk.Tk()
-    #root2.title("hahahtest")
+#root.bind("<Button 1>", m1click)
+#root.bind("<Button 3>", m2click)
 
-    #root2.mainloop()
-
-    #p1 = Process(target=runtk, args=(root,))
-    #p2 = Process(target=runtk, args=(root2,))
-
+# Bind some event modifiers, these alter the behavior when clicking the mouse.
+#bind_modifiers(root, m1click)
