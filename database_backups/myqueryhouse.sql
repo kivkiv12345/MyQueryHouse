@@ -1,4 +1,4 @@
--- MySQL dump 10.13  Distrib 8.0.22, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.23, for Linux (x86_64)
 --
 -- Host: localhost    Database: myqueryhouse
 -- ------------------------------------------------------
@@ -7,7 +7,7 @@
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
@@ -19,21 +19,28 @@
 -- Table structure for table `Category`
 --
 
-CREATE DATABASE IF NOT EXISTS `myqueryhouse`;
-USE `myqueryhouse`;
-
 DROP TABLE IF EXISTS `Category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Category` (
   `CategoryID` int unsigned NOT NULL AUTO_INCREMENT,
   `storageid` int unsigned DEFAULT NULL,
+  `Name` varchar(45) NOT NULL,
   PRIMARY KEY (`CategoryID`),
   UNIQUE KEY `CategoryID_UNIQUE` (`CategoryID`),
   KEY `storageid_idx` (`storageid`),
   CONSTRAINT `storageid` FOREIGN KEY (`storageid`) REFERENCES `Storage` (`StorageID`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `Category`
+--
+
+LOCK TABLES `Category` WRITE;
+/*!40000 ALTER TABLE `Category` DISABLE KEYS */;
+/*!40000 ALTER TABLE `Category` ENABLE KEYS */;
+UNLOCK TABLES;
 
 --
 -- Table structure for table `Customer`
@@ -53,6 +60,15 @@ CREATE TABLE `Customer` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Dumping data for table `Customer`
+--
+
+LOCK TABLES `Customer` WRITE;
+/*!40000 ALTER TABLE `Customer` DISABLE KEYS */;
+/*!40000 ALTER TABLE `Customer` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `Item`
 --
 
@@ -69,6 +85,38 @@ CREATE TABLE `Item` (
   CONSTRAINT `categoryid` FOREIGN KEY (`categoryid`) REFERENCES `Category` (`CategoryID`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `Item`
+--
+
+LOCK TABLES `Item` WRITE;
+/*!40000 ALTER TABLE `Item` DISABLE KEYS */;
+/*!40000 ALTER TABLE `Item` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ItemMtmCategory`
+--
+
+DROP TABLE IF EXISTS `ItemMtmCategory`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ItemMtmCategory` (
+  `itemid` int unsigned NOT NULL,
+  `categoryid` int unsigned NOT NULL,
+  PRIMARY KEY (`itemid`,`categoryid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ItemMtmCategory`
+--
+
+LOCK TABLES `ItemMtmCategory` WRITE;
+/*!40000 ALTER TABLE `ItemMtmCategory` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ItemMtmCategory` ENABLE KEYS */;
+UNLOCK TABLES;
 
 --
 -- Table structure for table `ItemPurchase`
@@ -92,6 +140,15 @@ CREATE TABLE `ItemPurchase` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Dumping data for table `ItemPurchase`
+--
+
+LOCK TABLES `ItemPurchase` WRITE;
+/*!40000 ALTER TABLE `ItemPurchase` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ItemPurchase` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `Order`
 --
 
@@ -109,6 +166,15 @@ CREATE TABLE `Order` (
   CONSTRAINT `customerid` FOREIGN KEY (`customerid`) REFERENCES `Customer` (`CustomerID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `Order`
+--
+
+LOCK TABLES `Order` WRITE;
+/*!40000 ALTER TABLE `Order` DISABLE KEYS */;
+/*!40000 ALTER TABLE `Order` ENABLE KEYS */;
+UNLOCK TABLES;
 
 --
 -- Table structure for table `Orderline`
@@ -132,6 +198,15 @@ CREATE TABLE `Orderline` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Dumping data for table `Orderline`
+--
+
+LOCK TABLES `Orderline` WRITE;
+/*!40000 ALTER TABLE `Orderline` DISABLE KEYS */;
+/*!40000 ALTER TABLE `Orderline` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `PurchaseOrder`
 --
 
@@ -148,6 +223,15 @@ CREATE TABLE `PurchaseOrder` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Dumping data for table `PurchaseOrder`
+--
+
+LOCK TABLES `PurchaseOrder` WRITE;
+/*!40000 ALTER TABLE `PurchaseOrder` DISABLE KEYS */;
+/*!40000 ALTER TABLE `PurchaseOrder` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `Storage`
 --
 
@@ -161,6 +245,15 @@ CREATE TABLE `Storage` (
   UNIQUE KEY `StorageID_UNIQUE` (`StorageID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `Storage`
+--
+
+LOCK TABLES `Storage` WRITE;
+/*!40000 ALTER TABLE `Storage` DISABLE KEYS */;
+/*!40000 ALTER TABLE `Storage` ENABLE KEYS */;
+UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -171,4 +264,4 @@ CREATE TABLE `Storage` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2021-04-14 15:20:15
+-- Dump completed on 2021-04-21 12:01:50

@@ -8,7 +8,7 @@ try:
     from multiprocessing import Process
     from mysql import connector
     from resources.utils import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
-    from resources.orm import CONNECTION, CURSOR
+    from resources import orm
 except ModuleNotFoundError as e:
     raise SystemExit(f"""
     ٩(^‿^)۶ Hey there, some import failed; stating: '{e}'.\n
@@ -50,20 +50,22 @@ if __name__ == '__main__':
             login.mainloop()
             try:
                 # Use the login details stored in our login widget for the MySQL connection.
-                CONNECTION = connector.connect(**login.logindeets)
+                orm.CONNECTION = connector.connect(**login.logindeets)
                 break
             except ProgrammingError as e:
                 login = LoginBox(e.msg)
 
-        CURSOR = CONNECTION.cursor()
+        orm.CURSOR = orm.CONNECTION.cursor()
+
+        orm.init_orm()
 
         try:  # Prompt the user to create the database, should it be absent.
-            CURSOR.execute(f"USE {DATABASE_NAME}")
+            orm.CURSOR.execute(f"USE {DATABASE_NAME}")
         except ProgrammingError:  # Assume the database to not exist, if we cannot use it.
-            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, CURSOR, CONNECTION, login.logindeets["passwd"])
+            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
             newdbmsg.mainloop()
 
-        root = MainDBView(DATABASE_NAME, CURSOR, CONNECTION, login.logindeets["passwd"])
+        root = MainDBView(DATABASE_NAME, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
 
         root.mainloop()
 

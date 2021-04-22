@@ -7,12 +7,14 @@ if __name__ == '__main__':
     raise SystemExit("(⊙＿⊙') Wha!?... Are you trying to run orm.py?\n"
                      " You know this is a bad idea; right? You should run app.py instead :)")
 
-from typing import Type, Dict
+from typing import Type, Dict, List, Any, Tuple
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
 
 CONNECTION: MySQLConnection = None
 CURSOR: CMySQLCursor = None
+
+DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoration file!
 
 """
 TABLE_EXCLUSION = {
@@ -50,22 +52,91 @@ class QuerySet:
 
     def evaluate(self):
         """ Performs the query """
-        CURSOR.execute(f"SELECT * FROM {self.model.table_name}")
+        try: CONNECTION.consume_results()
+        except Exception: pass
+        current_table: str = self.model.Meta.table_name
+        CURSOR.execute(f"SELECT * FROM {current_table}")
         self._raw_result = [obj for obj in CURSOR]
-        raise NotImplementedError()
+        self._query_result = [Models[current_table](obj) for obj in self._raw_result]
+        return self
+
+    def __iter__(self):
+        for instance in self._query_result.values():
+            yield instance
 
 
-class DBModel:
+class ModelField:
+    name: str = None
+    attrs: tuple = None
+
+    def __init__(self, column: tuple) -> None:
+        super().__init__()
+        self.name, *self.attrs = column
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class _DBModelMeta(type):
+    @property
+    def objects(cls) -> QuerySet:
+        return QuerySet(cls)
+
+
+class DBModel(metaclass=_DBModelMeta):
     """ Django'esque model class which converts table rows to Python class instances. """
-    table_name:str = None
 
-    def __init__(self, table_name:str=None) -> None:
+    fields: Dict[str, Any] = None
+
+    def __init__(self, **kwargs) -> None:
         """
         :param table_name: used to override the queried table name.
         """
+        print(kwargs)
         super().__init__()
-        self.table_name = table_name or self.__name__
 
     @property
-    def objects(self) -> QuerySet:
-        return QuerySet(self.__class__)
+    def pk(self) -> int:
+        return self.fields[self.Meta.pk_column]
+
+    class Meta:
+        """ Holds information about the makeup of the current class. """
+        table_name: str = None
+        pk_column: str = None
+        fields: Tuple[ModelField, ...] = None
+
+    def __str__(self) -> str:
+        return f"Meta for {self.Meta.table_name}"
+
+
+Models: Dict[str, Type[DBModel]] = {}
+
+
+def init_orm():
+    global Models
+
+    CURSOR.execute(f"USE {DATABASE_NAME}")
+    CURSOR.execute("SHOW TABLES")
+    table_names = [table_tuple[0] for table_tuple in CURSOR]
+
+    def get_columns(table_name:str):
+        CURSOR.execute(f"SHOW COLUMNS FROM {DATABASE_NAME}.{table_name}")
+        columndata = [column for column in CURSOR]
+        return columndata, next(col[0] for col in columndata if col[3] == 'PRI')
+
+    for name in table_names:
+        columns, pk_column = get_columns(name)  # Get the needed column data for the current model.
+
+        # Declare the new model, and populate it with attributes.
+        # The fields dictionary will hold the values contained within an instance of the model.
+        model = type(name, (DBModel,), {'fields': {column[0]: None for column in columns}})
+
+        # We add Meta to the model after declaration, such that it may refer back to its model.
+        setattr(model, 'Meta', type('Meta', (DBModel.Meta,), {'fields': tuple(ModelField(column) for column in columns), 'pk_column': pk_column, 'table_name': name}))
+
+        # Once we're finished with the current model, we add it to the dictionary with will hold them all.
+        Models[name] = model  # We use typehinting to indicate attributes that cannot be inferred from our generic type.
+
+    test2 = Models
+    test = Models['Storage'].objects
+    print(test)

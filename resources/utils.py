@@ -358,15 +358,14 @@ class MainDBView(TkUtilWidget):
     def _backup_database(self):
         """ Writes the current contents of the database to a corresponding file in the 'database_backups' directory. """
         with open(f"database_backups/{DATABASE_NAME}.sql", 'w+') as db_file:
-            # TODO Kevin: mysql does not write to file.
-            call(["mysql", "-u", "root", f"--password={self.password}", DATABASE_NAME], stdin=DEVNULL, stdout=db_file, stderr=DEVNULL)
+            call(["mysqldump", "-u", "root", f"--password={self.password}", DATABASE_NAME], stdin=DEVNULL, stdout=db_file, stderr=DEVNULL)
 
     def _restore_database(self):
         """
         Restores the contents of the current database from a corresponding file in the 'database_backups' directory.
         """
-        with open(f"database_backups/{DATABASE_NAME}.sql") as db_file:
-            call(["mysql", "-u", "root", f"--password={self.password}", DATABASE_NAME], stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+        with open(f"database_backups/{DATABASE_NAME}.sql", 'r+') as db_file:
+            call(["mysql", "-u", "root", f"--password={self.password}", DATABASE_NAME], stdin=db_file, stdout=db_file, stderr=DEVNULL)
 
 
 # Methods
