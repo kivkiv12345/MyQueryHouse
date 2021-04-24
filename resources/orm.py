@@ -1,13 +1,14 @@
 """
 Stores database data and queryset models.
 """
+from copy import copy
 
 if __name__ == '__main__':
     # Gently remind the user to not run utils.py themselves
     raise SystemExit("(⊙＿⊙') Wha!?... Are you trying to run orm.py?\n"
                      " You know this is a bad idea; right? You should run app.py instead :)")
 
-from typing import Type, Dict, List, Any, Tuple, Union
+from typing import Type, Dict, List, Any, Tuple, Union, Set
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
 
@@ -36,8 +37,8 @@ class QuerySet:
     """
     model = None
     _evaluated = False
-    _raw_result: Dict[str, Dict[str, str]] = None
-    _query_result: Dict[str, Type[object]] = None
+    _raw_result: Tuple[tuple, ...] = ()
+    _query_result = ()
 
     def __init__(self, model) -> None:
         """
@@ -45,29 +46,46 @@ class QuerySet:
         """
         super().__init__()
         self.model: Type[DBModel] = model
-        self._raw_result = {}
-        self._query_result: Dict[str, Type[DBModel]] = {}
+        self._query_result: Tuple[DBModel] = ()
 
         self.evaluate()  # TODO Kevin: Remember that queries are to be lazy.
 
     def evaluate(self):
-        """ Performs the query """
+        """ Performs the query and caches the result. """
         try: CONNECTION.consume_results()
         except Exception: pass
         current_table: str = self.model.Meta.table_name
         CURSOR.execute(f"SELECT * FROM {current_table}")
-        self._raw_result = [obj for obj in CURSOR]
-        self._query_result = [Models[current_table](obj) for obj in self._raw_result]
+        self._raw_result = *(obj for obj in CURSOR),
+        self._query_result = *(Models[current_table](obj) for obj in self._raw_result),
+        self._evaluated = True
         return self
 
     def __iter__(self):
-        for instance in self._query_result.values():
+        if not self._evaluated: self.evaluate()
+        for instance in self._query_result:
             yield instance
+
+    def create(self, **kwargs):
+        """ Creates an instance of the specified model, saves it to the database, and returns it to the user. """
+        invalid_field = next((field for field in kwargs.keys() if field not in self.model.fields), None)
+        if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}.")
+
+        # Check for NOT NULL fields that arent specified.
+        missing_required = next((field.name for field in self.model.Meta.fields if field.attrs[1] == 'NO' and field.attrs[2] != 'PRI' and field.name not in kwargs.keys()), None)
+        if missing_required: raise AttributeError(f"Cannot create {self.model} object without a value for {missing_required}")
+
+        instance = self.model(**kwargs)  # Create the instance before we save it.
+        instance.save()  # TODO Kevin: Get the primary key from the database when done.
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__} object of {self.model.__name__}"
 
 
 class ModelField:
+    """ Represents metadata for a column in the database, holds its name and other attributes. """
     name: str = None
-    attrs: tuple = None
+    attrs: tuple = None  # A tuple of metadata; such as whether the column is a primary key.
 
     def __init__(self, column: tuple) -> None:
         super().__init__()
@@ -80,31 +98,64 @@ class ModelField:
 class _DBModelMeta(type):
     @property
     def objects(cls) -> QuerySet:
+        """ :return: A lazy queryset which may be altered before eventually being evaluated when iterated over (for example). """
+        # Metaclassing somehow has to subclass itself be passed as an argument,
+        # which we forward to the queryset constructor.
         return QuerySet(cls)
 
 
 class DBModel(metaclass=_DBModelMeta):
     """ Django'esque model class which converts table rows to Python class instances. """
 
-    fields: Dict[str, Any] = None  # Holds the values of the instances.
     model = None
+    values: Dict[str, Any] = None  # Holds the values of the instances.
+    _initial_values: Dict[str, Any] = None  # Holds the initial values for comparison when saving.
 
-    def __init__(self, *args, zipped_data: zip=None) -> None:
+    def __init__(self, *args, zipped_data: zip = None, **kwargs) -> None:
         """
         :param table_name: used to override the queried table name.
         """
         # Allow a more readable way to access the class itself from its instances.
         self.model: Type[DBModel] = self.__class__
 
-        data = zipped_data or zip((col[0] for col in self.Meta.column_data), *args)
-        datadict = {fieldname: value for fieldname, value in data}
-        self.fields.update(datadict)
+        if kwargs:
+            invalid_field = next((field for field in kwargs.keys() if field not in {metafield.name for metafield in self.Meta.fields}), None)
+            if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}")
+            self.values = kwargs
+            self._initial_values = copy(self.values)
+        else:
+            # Zip the data correctly, such that we pair column names with their values.
+            data = zipped_data or zip(self.Meta.fieldnames, *args)
+            # Convert the result to a dictionary.
+            datadict = {fieldname: value for fieldname, value in data}
+
+            # Take care that we don't set invalid fields for the instance.
+            invalid_fields = set(datadict.keys()).difference(self.Meta.fieldnames)
+            if invalid_fields: raise AttributeError(f"{invalid_fields} are not valid fields for {self.model}")
+
+            # Merge the values into the class.
+            self.values = datadict
+            self._initial_values = copy(self.values)
 
         super().__init__()
 
     @property
     def pk(self) -> int:
-        return self.fields[self.Meta.pk_column]
+        """ Returns the value of the current instance's primary key. """
+        return self.values[self.Meta.pk_column]
+
+    def save(self) -> None:  # TODO Kevin: Test save.
+        """ Saves or updates the current instance in the database. """
+        diff = {column: value for column, value in self.values if (value or self._initial_values[column])}
+        if self.pk:
+            values = str(tuple(f"{column} = |||{value}|||" for column, value in diff.items()))[1:-2].replace(r"'",'').replace('|||', r"'")
+            CURSOR.execute(f"UPDATE {self.Meta.table_name} SET {values} WHERE {self.Meta.pk_column} = {self.pk}")
+        else:
+            columns, values = diff.items()
+            CURSOR.execute(f"INSERT INTO {self.Meta.table_name}({columns}) VALUES {values}")
+
+    def delete(self):
+        raise NotImplementedError("Cannot delete yet!")
 
     class Meta:
         """ Holds information about the makeup of the current class. """
@@ -113,10 +164,15 @@ class DBModel(metaclass=_DBModelMeta):
         table_name: str = None
         pk_column: str = None
         fields: Tuple[ModelField, ...] = None
+        fieldnames: Set[str] = None
         column_data: Tuple[Tuple[_col_hint, bytes, _col_hint, _col_hint, _col_hint, _col_hint], ...]
 
+        def __str__(self) -> str:
+            return f"Meta for {self.table_name}"
+
     def __str__(self) -> str:
-        return f"Meta for {self.Meta.table_name}"
+        """ :return: The class name paired with its primary key, when referring to an instance. Otherwise returns super. """
+        return f"{self.__class__.__name__} object ({self.pk})" if self.pk else super(DBModel, self).__str__()
 
 
 Models: Dict[str, Type[DBModel]] = {}
@@ -132,6 +188,7 @@ def init_orm():
     def get_columns(table_name:str):
         CURSOR.execute(f"SHOW COLUMNS FROM {DATABASE_NAME}.{table_name}")
         columndata = *(column for column in CURSOR),
+        # Returns a tuple of the things we need (All metadata for columns, and the primary key column).
         return columndata, next(col[0] for col in columndata if col[3] == 'PRI')
 
     for name in table_names:
@@ -144,6 +201,7 @@ def init_orm():
         # We add Meta to the model after declaration, such that it may refer back to its model.
         metadata = {
             'fields': tuple(ModelField(column) for column in columns),
+            'fieldnames': frozenset(column[0] for column in columns),
             'pk_column': pk_column,
             'table_name': name,
             'column_data': columns,
@@ -156,4 +214,5 @@ def init_orm():
 
     test2 = Models
     test = Models['Storage'].objects
+    print([str(i) for i in test])
     print(test)

@@ -17,7 +17,7 @@ from frozendict import frozendict
 from copy import deepcopy
 from mysql.connector import ProgrammingError
 from resources import orm # Duplicate import because we must specify CONNECTION and CURSOR from orm.
-from resources.orm import PK_IDENTIFIER
+from resources.orm import PK_IDENTIFIER, Models
 from datetime import datetime
 from tkinter.messagebox import askyesno
 from resources.widgets import VerticalScrolledFrame, OutputLog
