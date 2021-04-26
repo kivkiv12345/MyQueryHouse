@@ -27,8 +27,6 @@ TABLE_KEYS = {'Items': 'itemID',
               'Locations': 'locationID'}
 """
 
-PK_IDENTIFIER = "ID"  # Should reflect how table primary keys are suffixed in the database.
-
 
 class QuerySet:
     """
@@ -37,8 +35,7 @@ class QuerySet:
     """
     model = None
     _evaluated = False
-    _raw_result: Tuple[tuple, ...] = ()
-    _query_result = ()
+    _query_result: list = None
 
     def __init__(self, model) -> None:
         """
@@ -46,7 +43,7 @@ class QuerySet:
         """
         super().__init__()
         self.model: Type[DBModel] = model
-        self._query_result: Tuple[DBModel] = ()
+        self._query_result: List[DBModel] = []
 
         self.evaluate()  # TODO Kevin: Remember that queries are to be lazy.
 
@@ -55,9 +52,8 @@ class QuerySet:
         try: CONNECTION.consume_results()
         except Exception: pass
         current_table: str = self.model.Meta.table_name
-        CURSOR.execute(f"SELECT * FROM {current_table}")
-        self._raw_result = *(obj for obj in CURSOR),
-        self._query_result = *(Models[current_table](obj) for obj in self._raw_result),
+        CURSOR.execute(f"SELECT * FROM {DATABASE_NAME}.{current_table}")
+        self._query_result = [Models[current_table](obj) for obj in CURSOR]
         self._evaluated = True
         return self
 
@@ -96,6 +92,7 @@ class ModelField:
 
 
 class _DBModelMeta(type):
+    """ Black magic metaclass; which in our case allows us to specify properties, that are provided classes instead of instances when called on classes themselves. """
     @property
     def objects(cls) -> QuerySet:
         """ :return: A lazy queryset which may be altered before eventually being evaluated when iterated over (for example). """
@@ -110,6 +107,7 @@ class DBModel(metaclass=_DBModelMeta):
     model = None
     values: Dict[str, Any] = None  # Holds the values of the instances.
     _initial_values: Dict[str, Any] = None  # Holds the initial values for comparison when saving.
+    __pk: int = None  # pk is private as it must not be changed.
 
     def __init__(self, *args, zipped_data: zip = None, **kwargs) -> None:
         """
@@ -122,7 +120,6 @@ class DBModel(metaclass=_DBModelMeta):
             invalid_field = next((field for field in kwargs.keys() if field not in {metafield.name for metafield in self.Meta.fields}), None)
             if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}")
             self.values = kwargs
-            self._initial_values = copy(self.values)
         else:
             # Zip the data correctly, such that we pair column names with their values.
             data = zipped_data or zip(self.Meta.fieldnames, *args)
@@ -130,19 +127,21 @@ class DBModel(metaclass=_DBModelMeta):
             datadict = {fieldname: value for fieldname, value in data}
 
             # Take care that we don't set invalid fields for the instance.
-            invalid_fields = set(datadict.keys()).difference(self.Meta.fieldnames)
+            invalid_fields = set(datadict.keys()).difference(set(self.Meta.fieldnames))
             if invalid_fields: raise AttributeError(f"{invalid_fields} are not valid fields for {self.model}")
 
             # Merge the values into the class.
             self.values = datadict
-            self._initial_values = copy(self.values)
+
+        self.__pk = self.values.pop(self.Meta.pk_column, None)
+        self._initial_values = copy(self.values)
 
         super().__init__()
 
     @property
     def pk(self) -> int:
         """ Returns the value of the current instance's primary key. """
-        return self.values[self.Meta.pk_column]
+        return self.__pk
 
     def save(self) -> None:  # TODO Kevin: Test save.
         """ Saves or updates the current instance in the database. """
@@ -164,7 +163,7 @@ class DBModel(metaclass=_DBModelMeta):
         table_name: str = None
         pk_column: str = None
         fields: Tuple[ModelField, ...] = None
-        fieldnames: Set[str] = None
+        fieldnames: Tuple[str] = ()
         column_data: Tuple[Tuple[_col_hint, bytes, _col_hint, _col_hint, _col_hint, _col_hint], ...]
 
         def __str__(self) -> str:
@@ -196,12 +195,12 @@ def init_orm():
 
         # Declare the new model, and populate it with attributes.
         # The fields dictionary will hold the values contained within an instance of the model.
-        model = type(name, (DBModel,), {'fields': {column[0]: None for column in columns}})
+        model = type(name, (DBModel,), {})
 
         # We add Meta to the model after declaration, such that it may refer back to its model.
         metadata = {
             'fields': tuple(ModelField(column) for column in columns),
-            'fieldnames': frozenset(column[0] for column in columns),
+            'fieldnames': tuple(column[0] for column in columns),
             'pk_column': pk_column,
             'table_name': name,
             'column_data': columns,
@@ -212,7 +211,7 @@ def init_orm():
         # Once we're finished with the current model, we add it to the dictionary with will hold them all.
         Models[name] = model  # We use typehinting to indicate attributes that cannot be inferred from our generic type.
 
-    test2 = Models
+    """test2 = Models
     test = Models['Storage'].objects
     print([str(i) for i in test])
-    print(test)
+    print(test)"""

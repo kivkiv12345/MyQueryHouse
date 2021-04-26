@@ -8,7 +8,7 @@ if __name__ == '__main__':
                      " You do know it's only used to store utilities; right? You should run app.py instead :)")
 
 import tkinter as tk
-from typing import Set, Dict, Tuple, List, Union
+from typing import Set, Dict, Tuple, List, Union, Type
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
 from subprocess import DEVNULL, call
@@ -17,7 +17,7 @@ from frozendict import frozendict
 from copy import deepcopy
 from mysql.connector import ProgrammingError
 from resources import orm # Duplicate import because we must specify CONNECTION and CURSOR from orm.
-from resources.orm import PK_IDENTIFIER, Models
+from resources.orm import Models, DBModel, QuerySet
 from datetime import datetime
 from tkinter.messagebox import askyesno
 from resources.widgets import VerticalScrolledFrame, OutputLog
@@ -29,6 +29,30 @@ DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoratio
 
 
 # Classes
+class ormTableCanvas(TableCanvas):
+    """ Uses a OrmTableModel instead of a normal tableModel. """
+
+    def getModel(self):
+        return super().getModel()
+
+
+class OrmTableModel(TableModel):
+    """ May delete rows in supplied QuerySet, while also deleting in the connected table. """
+    _queryset: QuerySet = None
+
+    def __init__(self, newdict=None, rows=None, columns=None, queryset:QuerySet=None):
+        super().__init__(newdict, rows, columns)
+        self._queryset = queryset
+
+    def deleteRows(self, rowlist=None):
+        print('deleted rows')
+        super().deleteRows(rowlist)
+
+    def deleteRow(self, rowIndex=None, key=None, update=True):
+        print('deleted row')
+        super().deleteRow(rowIndex, key, update)
+
+
 class TkUtilWidget(tk.Tk):
     """ Holds some common utilities for widgets made for this application. """
 
@@ -184,10 +208,11 @@ class MainDBView(TkUtilWidget):
     outlog: tk.Text = None
     actionframe: tk.Frame = None
 
-    table_name: str = None  # Currently selected table is stored here for ease of access
+    model: Type[DBModel] = None  # Currently applicable model
 
     primary_keys: Set[int] = None  # Used to calculate the deleted rows in the shown table.
     initial_data = None  # Used to compare which rows needs to be updated in the database.
+    queryset: Tuple[DBModel] = ()
 
     def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, password:str, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
@@ -214,12 +239,12 @@ class MainDBView(TkUtilWidget):
 
         tk.Label(self, text="Rows").grid(column=2, row=0)
 
-        self.tablemodel = TableModel()
+        self.tablemodel = OrmTableModel()
 
         # The primary widget (namely; the table), which shows the rows in the database.
         self.rowframe = tk.Frame(self)
         self.rowframe.grid(column=2, row=1)
-        self.rowtable = TableCanvas(self.rowframe)
+        self.rowtable = TableCanvas(self.rowframe, model=self.tablemodel)
         self.rowtable.show()
 
         tk.Label(self, text="Actions").grid(column=0, row=2)
@@ -250,25 +275,16 @@ class MainDBView(TkUtilWidget):
     def _table_click(self, table_name: str):
         """ Runs when clicking any table button. """
         self.title(f"{root_title} | {table_name}")
-        self.table_name = table_name
+        self.model = Models[table_name]
 
-        self.db_cursor.execute(f"SHOW COLUMNS FROM {self.unambiguous_table}")
-
-        columnnames = [columntuple[0] for columntuple in self.db_cursor]
+        columnnames = self.model.Meta.fieldnames
 
         self.db_cursor.execute(f"SELECT EXISTS(SELECT 1 FROM {self.unambiguous_table})")
 
         if [thing for thing in self.db_cursor] != [(0,)]:  # The table has some content in it.
-            self.db_cursor.execute(f"SELECT * FROM {self.unambiguous_table}")
+            self.queryset: Tuple[DBModel] = self.model.objects
 
-            #data = {f"row{i}": {name: value for name, value in zip(columnnames, data) if name not in TABLE_EXCLUSION[self.table_name]} for i, data in enumerate(self.db_cursor)}
-
-            data = {
-                next(fieldlist[index] for index, name in enumerate(columnnames) if self.pk_column.endswith(name)):
-                    {name: value for name, value in zip(columnnames, fieldlist) if not self.pk_column.endswith(name)}
-                for fieldlist in self.db_cursor
-            }
-            #data = {dict(zip(columnnames, fieldlist))[TABLE_KEYS[self.table_name]]: dict(zip(columnnames, fieldlist)) for fieldlist in self.db_cursor}
+            data = {instance.pk: instance.values for instance in self.queryset}
             """
             data will be in the same format as this example taken from the tkinter docs.
             {
@@ -277,7 +293,8 @@ class MainDBView(TkUtilWidget):
             }
             """
         else:  # The table is empty. We therefore provide some data which allows us to see the name of the columns.
-            data = {None: {colname: None for colname in columnnames if not self.pk_column.endswith(colname)}}
+            self.queryset = ()
+            data = {None: {colname: None for colname in columnnames if colname != self.model.Meta.pk_column}}
 
         self.rowtable.destroy()  # Reinstating the table seems to work best.
         self.rowtable = TableCanvas(self.rowframe, data=data)
@@ -306,18 +323,15 @@ class MainDBView(TkUtilWidget):
 
         # TODO Kevin: Simultaneous deletions and additions override each others primary keys.
         if deleted_rows:  # Perform a single query which drops all the desired rows.
-            statements.append(f"DELETE FROM {self.table_name} WHERE {self.pk_column} IN ({', '.join(str(i) for i in deleted_rows)})")
-            #self.db_cursor.execute(f"DELETE FROM {self.table_name} WHERE {self.pk_column} IN ({', '.join(str(i) for i in deleted_rows)})")
+            statements.append(f"DELETE FROM {self.table_name} WHERE {self.model.Meta.pk_column} IN ({', '.join(str(i) for i in deleted_rows)})")
         if new_rows:  # Perform a single query which inserts all the desired rows.
             columnnames = list(new_rows[0].keys())  # Column names should be the same for all rows.
             values = ', '.join("('" + "', '".join(row.values()) + "')" for row in new_rows)
             statements.append(f"INSERT INTO {self.table_name}({', '.join(columnnames)}) VALUES {values}")
-            #self.db_cursor.execute(f"INSERT INTO {self.table_name}({', '.join(columnnames)}) VALUES {values}")
         if update_rows:
             for pk, data in update_rows.items():
                 values = str(tuple(f"{column} = |||{value}|||" for column, value in data.items()))[1:-2].replace(r"'", '').replace('|||', r"'")
-                statements.append(f"UPDATE {self.table_name} SET {values} WHERE {self.pk_column} = {pk}")
-                #self.db_cursor.execute(f"UPDATE {self.table_name} SET {values} WHERE {self.pk_column} = {pk}")
+                statements.append(f"UPDATE {self.table_name} SET {values} WHERE {self.model.Meta.pk_column} = {pk}")
 
         _sql = ";\n".join(statements)  # F-strings can't include escape sequences.
 
@@ -346,14 +360,9 @@ class MainDBView(TkUtilWidget):
     @property
     def unambiguous_table(self) -> str:
         """ Ambiguous table names must specify a schema. """
-        return f"{self.db_name}.{self.table_name}"
+        return f"{self.db_name}.{self.model.Meta.table_name}"
 
-    @property
-    def pk_column(self) -> str:
-        """ Provides a clean way to get the PK column of the current table. """
-        return self.table_name + PK_IDENTIFIER  # TODO Kevin: May need a more elegant and secure solution in the future.
-
-    def __str__(self): return f"Table of {self.table_name}"
+    def __str__(self): return f"Table of {self.model.Meta.table_name}"
 
     def _backup_database(self):
         """ Writes the current contents of the database to a corresponding file in the 'database_backups' directory. """
