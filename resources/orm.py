@@ -17,16 +17,6 @@ CURSOR: CMySQLCursor = None
 
 DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoration file!
 
-"""
-TABLE_EXCLUSION = {
-    'Items': {'itemID', },
-    'Locations': {'locationID', },
-}
-
-TABLE_KEYS = {'Items': 'itemID',
-              'Locations': 'locationID'}
-"""
-
 
 class QuerySet:
     """
@@ -96,7 +86,7 @@ class _DBModelMeta(type):
     @property
     def objects(cls) -> QuerySet:
         """ :return: A lazy queryset which may be altered before eventually being evaluated when iterated over (for example). """
-        # Metaclassing somehow has to subclass itself be passed as an argument,
+        # Metaclassing somehow makes the subclass itself be passed as an argument,
         # which we forward to the queryset constructor.
         return QuerySet(cls)
 
@@ -177,8 +167,13 @@ class DBModel(metaclass=_DBModelMeta):
 Models: Dict[str, Type[DBModel]] = {}
 
 
-def init_orm():
-    global Models
+def init_orm() -> Dict[str, Type[DBModel]]:
+    """
+    Populates the global Models dictionary with models matching tables in the database.
+    Should only ever be run once.
+    :return: The populated Models dictionary.
+    """
+    global Models  # Make a reference to the global Models dictionary.
 
     CURSOR.execute(f"USE {DATABASE_NAME}")
     CURSOR.execute("SHOW TABLES")
@@ -211,7 +206,9 @@ def init_orm():
         # Once we're finished with the current model, we add it to the dictionary with will hold them all.
         Models[name] = model  # We use typehinting to indicate attributes that cannot be inferred from our generic type.
 
-    """test2 = Models
+    return Models
+
+    """test2 = Models  # Get some ORM objects for debugging purposes.
     test = Models['Storage'].objects
     print([str(i) for i in test])
     print(test)"""

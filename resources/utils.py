@@ -38,19 +38,31 @@ class ormTableCanvas(TableCanvas):
 
 class OrmTableModel(TableModel):
     """ May delete rows in supplied QuerySet, while also deleting in the connected table. """
-    _queryset: QuerySet = None
+    _queryset: QuerySet = ()  # Initialise as an empty iterable value.
 
-    def __init__(self, newdict=None, rows=None, columns=None, queryset:QuerySet=None):
-        super().__init__(newdict, rows, columns)
+    def change_queryset(self, queryset:QuerySet) -> None:
+        """
+        Changes the queryset to the one provided, while also altering columns to match the provided model.
+        :param queryset: The new queryset to use.
+        """
+        # Empty the model first.
+        self.createEmptyModel()
         self._queryset = queryset
 
-    def deleteRows(self, rowlist=None):
-        print('deleted rows')
-        super().deleteRows(rowlist)
+        # Use the values from the queryset when possible; otherwise, create an empty row to indicate column names.
+        data = {instance.pk: instance.values for instance in queryset} or \
+               {None: {colname: None for colname in queryset.model.Meta.fieldnames if colname != queryset.model.Meta.pk_column}}
 
-    def deleteRow(self, rowIndex=None, key=None, update=True):
-        print('deleted row')
-        super().deleteRow(rowIndex, key, update)
+        """
+        data will be in the same format as this example taken from the tkinter docs.
+        {
+            'rec1': {'col1': 99.88, 'col2': 108.79, 'label': 'rec1'},
+            'rec2': {'col1': 99.88, 'col2': 108.79, 'label': 'rec2'}
+        }
+        """
+
+        # Import this data into the model.
+        self.importDict(data)
 
 
 class TkUtilWidget(tk.Tk):
@@ -212,7 +224,7 @@ class MainDBView(TkUtilWidget):
 
     primary_keys: Set[int] = None  # Used to calculate the deleted rows in the shown table.
     initial_data = None  # Used to compare which rows needs to be updated in the database.
-    queryset: Tuple[DBModel] = ()
+    queryset: List[DBModel] = None
 
     def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, password:str, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
@@ -239,7 +251,7 @@ class MainDBView(TkUtilWidget):
 
         tk.Label(self, text="Rows").grid(column=2, row=0)
 
-        self.tablemodel = OrmTableModel()
+        self.tablemodel, self.queryset = OrmTableModel(), []
 
         # The primary widget (namely; the table), which shows the rows in the database.
         self.rowframe = tk.Frame(self)
@@ -267,8 +279,8 @@ class MainDBView(TkUtilWidget):
         self.outlog = OutputLog(self, height=10, width=70)
         self.outlog.grid(column=2, row=3)
 
-        try:
-            self._table_click(table_name)  # Select a table by default.
+        try:  # Select a table by default. Fails if we couldn't iterate over tables.
+            self._table_click(table_name)
         except AttributeError:
             self.outlog.insert("Found no tables in the database")
 
@@ -276,28 +288,11 @@ class MainDBView(TkUtilWidget):
         """ Runs when clicking any table button. """
         self.title(f"{root_title} | {table_name}")
         self.model = Models[table_name]
-
-        columnnames = self.model.Meta.fieldnames
-
-        self.db_cursor.execute(f"SELECT EXISTS(SELECT 1 FROM {self.unambiguous_table})")
-
-        if [thing for thing in self.db_cursor] != [(0,)]:  # The table has some content in it.
-            self.queryset: Tuple[DBModel] = self.model.objects
-
-            data = {instance.pk: instance.values for instance in self.queryset}
-            """
-            data will be in the same format as this example taken from the tkinter docs.
-            {
-                'rec1': {'col1': 99.88, 'col2': 108.79, 'label': 'rec1'},
-                'rec2': {'col1': 99.88, 'col2': 108.79, 'label': 'rec2'}
-            }
-            """
-        else:  # The table is empty. We therefore provide some data which allows us to see the name of the columns.
-            self.queryset = ()
-            data = {None: {colname: None for colname in columnnames if colname != self.model.Meta.pk_column}}
+        self.queryset: QuerySet = self.model.objects
 
         self.rowtable.destroy()  # Reinstating the table seems to work best.
-        self.rowtable = TableCanvas(self.rowframe, data=data)
+        self.tablemodel.change_queryset(self.queryset)
+        self.rowtable = ormTableCanvas(self.rowframe, model=self.tablemodel)
         self.rowtable.show()
         self.rowtable.autoResizeColumns()
         model = self.rowtable.getModel()
@@ -317,21 +312,22 @@ class MainDBView(TkUtilWidget):
         # Read how the rows in the table have changed, and use the corresponding queries further on.
         deleted_rows = self.primary_keys.difference(set(model.reclist))
         new_rows: Tuple[Dict[str, str], ...] = *(row for pk, row in model.data.items() if pk not in self.primary_keys),
-        update_rows = {pk: {column: value for column, value in data.items() if value != self.initial_data[pk][column]} for pk, data in model.data.items() if pk in self.primary_keys and data != self.initial_data[pk]}
+        update_rows = {instance.pk: {column: value for column, value in instance.values.items() if value != instance._initial_values[column]} for instance in self.queryset if instance.values != instance._initial_values}
 
         statements: List[str] = []
 
-        # TODO Kevin: Simultaneous deletions and additions override each others primary keys.
+        table_name, pk_column = self.model.Meta.table_name, self.model.Meta.pk_column  # Shorten Meta names.
+
         if deleted_rows:  # Perform a single query which drops all the desired rows.
-            statements.append(f"DELETE FROM {self.table_name} WHERE {self.model.Meta.pk_column} IN ({', '.join(str(i) for i in deleted_rows)})")
+            statements.append(f"DELETE FROM {table_name} WHERE {pk_column} IN ({', '.join(str(i) for i in deleted_rows)})")
         if new_rows:  # Perform a single query which inserts all the desired rows.
             columnnames = list(new_rows[0].keys())  # Column names should be the same for all rows.
             values = ', '.join("('" + "', '".join(row.values()) + "')" for row in new_rows)
-            statements.append(f"INSERT INTO {self.table_name}({', '.join(columnnames)}) VALUES {values}")
+            statements.append(f"INSERT INTO {DATABASE_NAME}.{table_name}({', '.join(columnnames)}) VALUES {values}")
         if update_rows:
             for pk, data in update_rows.items():
                 values = str(tuple(f"{column} = |||{value}|||" for column, value in data.items()))[1:-2].replace(r"'", '').replace('|||', r"'")
-                statements.append(f"UPDATE {self.table_name} SET {values} WHERE {self.model.Meta.pk_column} = {pk}")
+                statements.append(f"UPDATE {table_name} SET {values} WHERE {pk_column} = {pk}")
 
         _sql = ";\n".join(statements)  # F-strings can't include escape sequences.
 
@@ -341,26 +337,24 @@ class MainDBView(TkUtilWidget):
         if not statements:
             self.outlog.insert('Canceled attempt to commit: Nothing to commit!')
         elif askyesno("Confirm statements", f"Do you want the following SQL to be executed on the database?:\n\n{_sql}"):
-            self.db_cursor.execute("; ".join(statements))
+            #self.db_cursor.execute("; ".join(statements))
+            for command in statements:
+                self.db_cursor.execute(command)
             self.db_connection.commit()
             changecount = len(deleted_rows) + len(new_rows) + len(update_rows)
             self.outlog.insert(f"committed {changecount} change{'s' if changecount != 1 else ''} to {self.db_name}, at {datetime.now()}.")
             self.outlog.insert(_sql)
-            self._table_click(self.table_name)  # Temporary solution to reset stored primary keys.
+            self._table_click(table_name)  # Temporary solution to reset stored primary keys.
 
     def destroy(self, deliberate=False):
         """ Resets the database connection before calling super. """
+        orm.CURSOR.close(); orm.CONNECTION.close()
         orm.CONNECTION = orm.CURSOR = None  # Reset the MySQL connection.
         super().destroy(deliberate)
 
     def _log_out(self):
         """ Creates a window which prompts the user as to if they want to log out. """
         if askyesno(title='Log out?', message='Are you sure you want to log out?'): self.destroy(True)
-
-    @property
-    def unambiguous_table(self) -> str:
-        """ Ambiguous table names must specify a schema. """
-        return f"{self.db_name}.{self.model.Meta.table_name}"
 
     def __str__(self): return f"Table of {self.model.Meta.table_name}"
 
