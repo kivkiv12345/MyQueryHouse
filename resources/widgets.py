@@ -5,7 +5,9 @@ if __name__ == '__main__':
                      "must be thought a fool, for trying run run a file which is obviously only used to store widgets...")
 
 import tkinter as tk
-from typing import Type
+from typing import Tuple
+from resources import orm
+from frozendict import frozendict
 
 
 class NotReadOnlyWidget:
@@ -75,6 +77,59 @@ class VerticalScrolledFrame(tk.Frame):  # Shamelessly stolen from: https://stack
                 # update the inner frame's width to fill the canvas
                 canvas.itemconfigure(interior_id, width=canvas.winfo_width())
         canvas.bind('<Configure>', _configure_canvas)
+
+    def show_tables(self) -> Tuple[str, ...]:
+        for button in tuple(self.interior.children.values()):
+            button.destroy()
+
+        orm.CURSOR.execute("SHOW TABLES")
+        table_names = *(db[0] for db in orm.CURSOR),
+
+        for table_name in table_names:
+            btn = tk.Button(self.interior, height=1, width=20, relief=tk.FLAT,
+                            bg="gray99", fg="black", text=table_name,
+                            command=lambda name=table_name: self.master._table_click(name))
+            btn.pack(padx=10, pady=5, side=tk.TOP)
+
+        return table_names
+
+    def show_views(self) -> Tuple[str, ...]:
+        for button in tuple(self.interior.children.values()):
+            button.destroy()
+
+        orm.CURSOR.execute("SHOW FULL TABLES WHERE table_type = 'VIEW';")
+        view_names = *(db[0] for db in orm.CURSOR),
+
+        raise NotImplementedError()  # TODO Kevin: Work from here.
+
+        for view in view_names:
+            btn = tk.Button(self.interior, height=1, width=20, relief=tk.FLAT,
+                            bg="gray99", fg="black", text=table_name,
+                            command=lambda name=table_name: self.master._table_click(name))
+            btn.pack(padx=10, pady=5, side=tk.TOP)
+
+        return view_names
+
+
+class SwitchViewModeButton(tk.Button):
+    modes = frozendict(tables='views', views='tables')
+    next_mode = 'views'
+    table_view: VerticalScrolledFrame = None
+
+    def __init__(self, table_view:VerticalScrolledFrame, master=None, cnf={}, **kw):
+        super().__init__(master, cnf,
+                         text=kw.pop('text', f"Show {self.next_mode}"),
+                         command=kw.pop('command', self.switch_mode), **kw)
+        self.table_view = table_view
+
+    def switch_mode(self) -> None:
+        """ Changes the linked table_view to its next mode. """
+        if self.next_mode == 'tables':
+            self.table_view.show_tables()
+        else:
+            self.table_view.show_views()
+        self.next_mode = self.modes[self.next_mode]
+        self.config(text=f"Show {self.next_mode}")
 
 
 class OutputLogOptionMenu(tk.Menu):

@@ -20,8 +20,7 @@ from resources import orm # Duplicate import because we must specify CONNECTION 
 from resources.orm import Models, DBModel, QuerySet
 from datetime import datetime
 from tkinter.messagebox import askyesno
-from resources.widgets import VerticalScrolledFrame, OutputLog
-
+from resources.widgets import VerticalScrolledFrame, OutputLog, SwitchViewModeButton
 
 # VARS
 root_title = "MyQueryHouse | MySQL Connector Program"
@@ -29,7 +28,7 @@ DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoratio
 
 
 # Classes
-class ormTableCanvas(TableCanvas):
+class OrmTableCanvas(TableCanvas):
     """ Uses a OrmTableModel instead of a normal tableModel. """
 
     def getModel(self):
@@ -215,6 +214,7 @@ class MainDBView(TkUtilWidget):
     db_connection: MySQLConnection = None
     password: str = None
 
+    db_scrollview: VerticalScrolledFrame = None
     rowframe: tk.Frame = None
     rowtable: TableCanvas = None
     outlog: tk.Text = None
@@ -236,18 +236,11 @@ class MainDBView(TkUtilWidget):
         #self.geometry("1000x500")
         #self.configure(bg="gray")
 
-        db_scrollview = VerticalScrolledFrame(self, highlightbackground="black", highlightthickness=1)
+        self.db_scrollview = VerticalScrolledFrame(self, highlightbackground="black", highlightthickness=1)
         tk.Label(self, text="Tables").grid(column=0)
-        db_scrollview.grid(column=0)
+        self.db_scrollview.grid(column=0)
 
-        db_cursor.execute("SHOW TABLES")
-
-        db_names = (db[0] for db in db_cursor)
-        for table_name in db_names:
-            btn = tk.Button(db_scrollview.interior, height=1, width=20, relief=tk.FLAT,
-                            bg="gray99", fg="black", text=table_name,
-                            command=lambda name=table_name: self._table_click(name))
-            btn.pack(padx=10, pady=5, side=tk.TOP)
+        table_name = self.db_scrollview.show_tables()[-1]
 
         tk.Label(self, text="Rows").grid(column=2, row=0)
 
@@ -266,6 +259,7 @@ class MainDBView(TkUtilWidget):
         self.actionframe.grid(column=0, row=3)
 
         # Buttons for the actions frame.
+        SwitchViewModeButton(self.db_scrollview, self.actionframe, width=20).grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Delete {self.db_name}", command=self._delete_database).grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Commit to {self.db_name}", command=self._save).grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Backup of {self.db_name}", command=self._backup_database).grid(column=0)
@@ -292,7 +286,7 @@ class MainDBView(TkUtilWidget):
 
         self.rowtable.destroy()  # Reinstating the table seems to work best.
         self.tablemodel.change_queryset(self.queryset)
-        self.rowtable = ormTableCanvas(self.rowframe, model=self.tablemodel)
+        self.rowtable = OrmTableCanvas(self.rowframe, model=self.tablemodel)
         self.rowtable.show()
         self.rowtable.autoResizeColumns()
         model = self.rowtable.getModel()
