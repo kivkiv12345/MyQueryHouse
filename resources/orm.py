@@ -82,7 +82,10 @@ class ModelField:
 
 
 class _DBModelMeta(type):
-    """ Black magic metaclass; which in our case allows us to specify properties, that are provided classes instead of instances when called on classes themselves. """
+    """
+    Black magic metaclass; which in our case allows us to specify properties,
+    that are provided classes instead of instances when called on classes themselves.
+    """
     @property
     def objects(cls) -> QuerySet:
         """ :return: A lazy queryset which may be altered before eventually being evaluated when iterated over (for example). """
@@ -100,19 +103,18 @@ class DBModel(metaclass=_DBModelMeta):
     __pk: int = None  # pk is private as it must not be changed.
 
     def __init__(self, *args, zipped_data: zip = None, **kwargs) -> None:
-        """
-        :param table_name: used to override the queried table name.
-        """
+        """ Accepts multiple ways to pass model instance data. """
         # Allow a more readable way to access the class itself from its instances.
         self.model: Type[DBModel] = self.__class__
 
+        # We allow several different ways to pass data to the constructor of the model instance
         if kwargs:
             invalid_field = next((field for field in kwargs.keys() if field not in {metafield.name for metafield in self.Meta.fields}), None)
             if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}")
             self.values = kwargs
         else:
             # Zip the data correctly, such that we pair column names with their values.
-            data = zipped_data or zip(self.Meta.fieldnames, *args)
+            data = zipped_data or zip(self.Meta.fieldnames, *args) or {field: None for field in self.Meta.fieldnames}
             # Convert the result to a dictionary.
             datadict = {fieldname: value for fieldname, value in data}
 
@@ -123,6 +125,8 @@ class DBModel(metaclass=_DBModelMeta):
             # Merge the values into the class.
             self.values = datadict
 
+        # We run these assignments sequentially,
+        # to ensure that the primary key is removed from the dictionary, before it is copied.
         self.__pk = self.values.pop(self.Meta.pk_column, None)
         self._initial_values = copy(self.values)
 
@@ -135,6 +139,7 @@ class DBModel(metaclass=_DBModelMeta):
 
     def save(self) -> None:  # TODO Kevin: Test save.
         """ Saves or updates the current instance in the database. """
+        raise NotImplementedError("Save method is currently not finished.")
         diff = {column: value for column, value in self.values if (value or self._initial_values[column])}
         if self.pk:
             values = str(tuple(f"{column} = |||{value}|||" for column, value in diff.items()))[1:-2].replace(r"'",'').replace('|||', r"'")
@@ -143,8 +148,7 @@ class DBModel(metaclass=_DBModelMeta):
             columns, values = diff.items()
             CURSOR.execute(f"INSERT INTO {self.Meta.table_name}({columns}) VALUES {values}")
 
-    def delete(self):
-        raise NotImplementedError("Cannot delete yet!")
+    def delete(self): raise NotImplementedError("Cannot delete yet!")
 
     class Meta:
         """ Holds information about the makeup of the current class. """
@@ -170,13 +174,13 @@ Models: Dict[str, Type[DBModel]] = {}
 def init_orm() -> Dict[str, Type[DBModel]]:
     """
     Populates the global Models dictionary with models matching tables in the database.
-    Should only ever be run once.
+    Ought to only ever be run once during the app startup.
     :return: The populated Models dictionary.
     """
     global Models  # Make a reference to the global Models dictionary.
 
     CURSOR.execute(f"USE {DATABASE_NAME}")
-    CURSOR.execute("SHOW TABLES")
+    CURSOR.execute("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
     table_names = [table_tuple[0] for table_tuple in CURSOR]
 
     def get_columns(table_name:str):
@@ -207,8 +211,3 @@ def init_orm() -> Dict[str, Type[DBModel]]:
         Models[name] = model  # We use typehinting to indicate attributes that cannot be inferred from our generic type.
 
     return Models
-
-    """test2 = Models  # Get some ORM objects for debugging purposes.
-    test = Models['Storage'].objects
-    print([str(i) for i in test])
-    print(test)"""

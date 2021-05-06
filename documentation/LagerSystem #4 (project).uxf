@@ -4,123 +4,13 @@
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>18</x>
-      <y>261</y>
+      <x>45</x>
+      <y>252</y>
       <w>189</w>
-      <h>72</h>
-    </coordinates>
-    <panel_attributes>Schema
---
-+name: str
---
-+get_models(): List[Model]</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>UMLClass</id>
-    <coordinates>
-      <x>18</x>
-      <y>396</y>
-      <w>189</w>
-      <h>72</h>
-    </coordinates>
-    <panel_attributes>Model
---
-+name: str
---
-+get_fields(): List[Field]</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>108</x>
-      <y>324</y>
-      <w>45</w>
       <h>90</h>
     </coordinates>
-    <panel_attributes>lt=-&gt;&gt;&gt;&gt;
-m1=0..n</panel_attributes>
-    <additional_attributes>10.0;80.0;10.0;10.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>108</x>
-      <y>459</y>
-      <w>45</w>
-      <h>99</h>
-    </coordinates>
-    <panel_attributes>lt=-&gt;&gt;&gt;&gt;&gt;
-m1=0..n</panel_attributes>
-    <additional_attributes>10.0;90.0;10.0;10.0</additional_attributes>
-  </element>
-  <element>
-    <id>UMLClass</id>
-    <coordinates>
-      <x>18</x>
-      <y>540</y>
-      <w>189</w>
-      <h>72</h>
-    </coordinates>
-    <panel_attributes>Field
---
-+name: str
-+value: Any
---
-</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>UMLClass</id>
-    <coordinates>
-      <x>279</x>
-      <y>396</y>
-      <w>189</w>
-      <h>72</h>
-    </coordinates>
-    <panel_attributes>Query
---
-+schema: Schema
-+result: List[Model]
---
-+__len__(): int</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>198</x>
-      <y>288</y>
-      <w>189</w>
-      <h>126</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;-
-m1=1</panel_attributes>
-    <additional_attributes>10.0;10.0;190.0;10.0;190.0;120.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>198</x>
-      <y>423</y>
-      <w>99</w>
-      <h>36</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;-
-m1=0..n</panel_attributes>
-    <additional_attributes>10.0;10.0;90.0;10.0</additional_attributes>
-  </element>
-  <element>
-    <id>UMLClass</id>
-    <coordinates>
-      <x>0</x>
-      <y>117</y>
-      <w>189</w>
-      <h>99</h>
-    </coordinates>
     <panel_attributes>&lt;&lt;enumaration&gt;&gt;
-keymodes
+KeyModes
 --
 +SHIFT: 		int = 1
 +CONTROL: 	int = 2
@@ -132,12 +22,12 @@ keymodes
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>810</x>
-      <y>261</y>
+      <x>855</x>
+      <y>387</y>
       <w>234</w>
       <h>153</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 Item
 --
 +ItemID: INTEGER (NN, PK, AI)
@@ -148,12 +38,12 @@ Item
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>810</x>
-      <y>513</y>
+      <x>855</x>
+      <y>639</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 Storage
 --
 +StorageID: INTEGER (NN, PK, AI)
@@ -163,12 +53,12 @@ Storage
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1116</x>
-      <y>513</y>
+      <x>1161</x>
+      <y>639</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 Category
 --
 +CategoryID: INTEGER (NN, PK, AI)
@@ -179,12 +69,12 @@ Category
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>810</x>
-      <y>108</y>
+      <x>855</x>
+      <y>234</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 Customer
 --
 +CustomerID: INTEGER (NN, PK, AI)
@@ -196,12 +86,12 @@ Customer
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1116</x>
-      <y>108</y>
+      <x>1161</x>
+      <y>234</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 Order
 --
 +OrderID: INTEGER (NN, PK, AI)
@@ -213,12 +103,12 @@ Order
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1116</x>
-      <y>297</y>
+      <x>1161</x>
+      <y>423</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 Orderline
 --
 +OrderlineID: INTEGER (NN, PK, AI)
@@ -230,8 +120,8 @@ Orderline
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1035</x>
-      <y>162</y>
+      <x>1080</x>
+      <y>288</y>
       <w>99</w>
       <h>36</h>
     </coordinates>
@@ -243,8 +133,8 @@ m2=m</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1035</x>
-      <y>351</y>
+      <x>1080</x>
+      <y>477</y>
       <w>99</w>
       <h>36</h>
     </coordinates>
@@ -256,8 +146,8 @@ m2=m</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1035</x>
-      <y>558</y>
+      <x>1080</x>
+      <y>684</y>
       <w>99</w>
       <h>36</h>
     </coordinates>
@@ -269,8 +159,8 @@ m2=m</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1224</x>
-      <y>216</y>
+      <x>1269</x>
+      <y>342</y>
       <w>36</w>
       <h>99</h>
     </coordinates>
@@ -282,12 +172,12 @@ m2=m</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>513</x>
-      <y>513</y>
+      <x>558</x>
+      <y>639</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 PurchaseOrder
 --
 +PurchaseOrderID: INTEGER (NN, PK, AI)
@@ -298,12 +188,12 @@ PurchaseOrder
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>513</x>
-      <y>297</y>
+      <x>558</x>
+      <y>423</y>
       <w>234</w>
       <h>117</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 ItemPurchase
 --
 +ItemPurchaseID: INTEGER (NN, PK, AI)
@@ -315,8 +205,8 @@ ItemPurchase
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>738</x>
-      <y>351</y>
+      <x>783</x>
+      <y>477</y>
       <w>90</w>
       <h>36</h>
     </coordinates>
@@ -328,8 +218,8 @@ m2=m</panel_attributes>
   <element>
     <id>UMLNote</id>
     <coordinates>
-      <x>810</x>
-      <y>351</y>
+      <x>855</x>
+      <y>477</y>
       <w>180</w>
       <h>63</h>
     </coordinates>
@@ -341,8 +231,8 @@ bg=blue</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>621</x>
-      <y>405</y>
+      <x>666</x>
+      <y>531</y>
       <w>36</w>
       <h>126</h>
     </coordinates>
@@ -354,8 +244,8 @@ m2=m</panel_attributes>
   <element>
     <id>UMLNote</id>
     <coordinates>
-      <x>513</x>
-      <y>234</y>
+      <x>558</x>
+      <y>360</y>
       <w>216</w>
       <h>63</h>
     </coordinates>
@@ -367,23 +257,23 @@ bg=blue</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>0</x>
-      <y>234</y>
+      <x>45</x>
+      <y>360</y>
       <w>486</w>
       <h>396</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;ORM Layer&gt;&gt; (WIP)</panel_attributes>
+    <panel_attributes>&lt;&lt;ORM Layer&gt;&gt;</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>963</x>
-      <y>423</y>
+      <x>1008</x>
+      <y>549</y>
       <w>234</w>
       <h>72</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Database&gt;&gt;
+    <panel_attributes>&lt;&lt;Table&gt;&gt;
 ItemMtmCategory
 --
 +itemid: INTEGER (NN, PK, UN)
@@ -394,8 +284,8 @@ ItemMtmCategory
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>891</x>
-      <y>405</y>
+      <x>936</x>
+      <y>531</y>
       <w>90</w>
       <h>81</h>
     </coordinates>
@@ -407,8 +297,8 @@ m2=m</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1188</x>
-      <y>450</y>
+      <x>1233</x>
+      <y>576</y>
       <w>117</w>
       <h>81</h>
     </coordinates>
@@ -416,5 +306,163 @@ m2=m</panel_attributes>
 m1=1
 m2=m</panel_attributes>
     <additional_attributes>10.0;10.0;100.0;10.0;100.0;70.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>63</x>
+      <y>657</y>
+      <w>189</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Class&gt;&gt;
+QuerySet
+--
++model: DBModel
++_query_result: List[DBModel]
+--
++evaluate(): None</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>315</x>
+      <y>531</y>
+      <w>189</w>
+      <h>144</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Class&gt;&gt;
+DBModel
+--
++model: DBModel
++values: Dict[str, Any]
++_initial_values: Dict[str, Any]
++__pk: int
+--
++pk(): None
++save(): None
++delete(): None</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>63</x>
+      <y>522</y>
+      <w>189</w>
+      <h>126</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Class&gt;&gt;
+Meta
+--
++table_name: str
++pk_column: str
++fields: Tuple[ModelField, ...]
++fieldnames: Tuple[str]
++column_data: Tuple[Tuple, ...]
+--</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>315</x>
+      <y>387</y>
+      <w>189</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;MetaClass&gt;&gt;
+_DBModelMeta
+--
+
+--
++objects(): QuerySet</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>72</x>
+      <y>387</y>
+      <w>189</w>
+      <h>81</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Class&gt;&gt;
+ModelField
+--
++name: str
++attrs: tuple
+--
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>396</x>
+      <y>468</y>
+      <w>27</w>
+      <h>81</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;70.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>243</x>
+      <y>567</y>
+      <w>90</w>
+      <h>36</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>80.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>153</x>
+      <y>459</y>
+      <w>27</w>
+      <h>81</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-
+m1=n
+m2=1</panel_attributes>
+    <additional_attributes>10.0;70.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>243</x>
+      <y>666</y>
+      <w>180</w>
+      <h>72</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-
+m1=n
+m2=1</panel_attributes>
+    <additional_attributes>10.0;50.0;180.0;50.0;180.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>261</x>
+      <y>252</y>
+      <w>189</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;enumaration&gt;&gt;
+ViewModes
+--
++TABLE:	str = 'BASE TABLE'
++VIEW: 	str = 'VIEW'
+
+--
+</panel_attributes>
+    <additional_attributes/>
   </element>
 </diagram>

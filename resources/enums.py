@@ -1,3 +1,5 @@
+""" This file consists of different enumerations used by this program. """
+
 if __name__ == '__main__':
     # Gently remind the user to not run enums.py themselves
     raise SystemExit("Hiya (ʘ‿ʘ)╯, it appears you're trying to run enums.py instead of app.py. This, sadly, will not work :(")
@@ -10,3 +12,9 @@ class KeyModes(Enum):
     SHIFT   = 1
     CONTROL = 2
     ALT     = 3
+
+
+class ViewModes(Enum):
+    """ Enum to hold different types of tables to show in the table button list. """
+    TABLE   = 'BASE TABLE'
+    VIEW    = 'VIEW'

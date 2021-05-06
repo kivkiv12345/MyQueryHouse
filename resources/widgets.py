@@ -1,4 +1,5 @@
 """ This file contains user defined widgets, that are to be situated inside tk instances. """
+import traceback
 
 if __name__ == '__main__':
     raise SystemExit("...and let it be known through revelation; that those who make attempts to run 'widgets.py directly'"
@@ -8,6 +9,7 @@ import tkinter as tk
 from typing import Tuple
 from resources import orm
 from frozendict import frozendict
+from resources.enums import ViewModes
 
 
 class NotReadOnlyWidget:
@@ -78,37 +80,29 @@ class VerticalScrolledFrame(tk.Frame):  # Shamelessly stolen from: https://stack
                 canvas.itemconfigure(interior_id, width=canvas.winfo_width())
         canvas.bind('<Configure>', _configure_canvas)
 
-    def show_tables(self) -> Tuple[str, ...]:
+    def show_mode(self, mode:ViewModes) -> Tuple[str, ...]:
+        """
+        Removes existing buttons in the table/view list, and adds those corresponding to the specified mode.
+        :return: A tuple of queried table/view names.
+        """
         for button in tuple(self.interior.children.values()):
             button.destroy()
 
-        orm.CURSOR.execute("SHOW TABLES")
+        orm.CURSOR.execute(f"SHOW FULL TABLES WHERE Table_type = '{mode.value}'")
         table_names = *(db[0] for db in orm.CURSOR),
 
         for table_name in table_names:
             btn = tk.Button(self.interior, height=1, width=20, relief=tk.FLAT,
                             bg="gray99", fg="black", text=table_name,
-                            command=lambda name=table_name: self.master._table_click(name))
+                            command=lambda name=table_name: self.master._table_click(name, mode))
             btn.pack(padx=10, pady=5, side=tk.TOP)
+
+        try:
+            self.master._table_click(table_name, mode)
+        except IndexError:
+            self.master.outlog.insert(f"Found no {mode.value}s in the database.")
 
         return table_names
-
-    def show_views(self) -> Tuple[str, ...]:
-        for button in tuple(self.interior.children.values()):
-            button.destroy()
-
-        orm.CURSOR.execute("SHOW FULL TABLES WHERE table_type = 'VIEW';")
-        view_names = *(db[0] for db in orm.CURSOR),
-
-        raise NotImplementedError()  # TODO Kevin: Work from here.
-
-        for view in view_names:
-            btn = tk.Button(self.interior, height=1, width=20, relief=tk.FLAT,
-                            bg="gray99", fg="black", text=table_name,
-                            command=lambda name=table_name: self.master._table_click(name))
-            btn.pack(padx=10, pady=5, side=tk.TOP)
-
-        return view_names
 
 
 class SwitchViewModeButton(tk.Button):
@@ -124,10 +118,12 @@ class SwitchViewModeButton(tk.Button):
 
     def switch_mode(self) -> None:
         """ Changes the linked table_view to its next mode. """
-        if self.next_mode == 'tables':
-            self.table_view.show_tables()
-        else:
-            self.table_view.show_views()
+        try:
+            mode = ViewModes.TABLE if self.next_mode == 'tables' else ViewModes.VIEW
+            self.table_view.show_mode(mode)
+
+        except Exception:
+            traceback.print_exc() # Stop exceptions in table button list from preventing mode switching on this button.
         self.next_mode = self.modes[self.next_mode]
         self.config(text=f"Show {self.next_mode}")
 

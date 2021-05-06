@@ -1,6 +1,7 @@
 """
 This module holds the utility methods and classes used by MyQueryHouse.
 """
+from resources.enums import ViewModes
 
 if __name__ == '__main__':
     # Gently remind the user to not run utils.py themselves
@@ -49,6 +50,7 @@ class OrmTableModel(TableModel):
         self._queryset = queryset
 
         # Use the values from the queryset when possible; otherwise, create an empty row to indicate column names.
+        # TODO Kevin: Ensure no errors occur for odd data types.
         data = {instance.pk: instance.values for instance in queryset} or \
                {None: {colname: None for colname in queryset.model.Meta.fieldnames if colname != queryset.model.Meta.pk_column}}
 
@@ -214,11 +216,13 @@ class MainDBView(TkUtilWidget):
     db_connection: MySQLConnection = None
     password: str = None
 
+    # Widget details
     db_scrollview: VerticalScrolledFrame = None
     rowframe: tk.Frame = None
     rowtable: TableCanvas = None
     outlog: tk.Text = None
     actionframe: tk.Frame = None
+    commitbutton: tk.Button = None
 
     model: Type[DBModel] = None  # Currently applicable model
 
@@ -229,7 +233,9 @@ class MainDBView(TkUtilWidget):
     def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, password:str, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
 
+        # Make some assignments from provided or default variables.
         self.db_name, self.db_cursor, self.db_connection, self.password = db_name, db_cursor, db_connection, password
+        self.tablemodel, self.queryset = OrmTableModel(), []
 
         self.title(root_title)
 
@@ -240,11 +246,7 @@ class MainDBView(TkUtilWidget):
         tk.Label(self, text="Tables").grid(column=0)
         self.db_scrollview.grid(column=0)
 
-        table_name = self.db_scrollview.show_tables()[-1]
-
         tk.Label(self, text="Rows").grid(column=2, row=0)
-
-        self.tablemodel, self.queryset = OrmTableModel(), []
 
         # The primary widget (namely; the table), which shows the rows in the database.
         self.rowframe = tk.Frame(self)
@@ -261,11 +263,13 @@ class MainDBView(TkUtilWidget):
         # Buttons for the actions frame.
         SwitchViewModeButton(self.db_scrollview, self.actionframe, width=20).grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Delete {self.db_name}", command=self._delete_database).grid(column=0)
-        tk.Button(self.actionframe, width=20, text=f"Commit to {self.db_name}", command=self._save).grid(column=0)
+        self.commitbutton = tk.Button(self.actionframe, width=20, text=f"Commit to {self.db_name}", command=self._save)
+        self.commitbutton.grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Backup of {self.db_name}", command=self._backup_database).grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Restore from backup", command=self._restore_database).grid(column=0)
-
         tk.Button(self.actionframe, width=20, text=f"Log out", command=self._log_out).grid(column=0)
+
+        self.db_scrollview.show_mode(ViewModes.TABLE)
 
         tk.Label(self, text="Output Log").grid(column=2, row=2)
 
@@ -273,19 +277,27 @@ class MainDBView(TkUtilWidget):
         self.outlog = OutputLog(self, height=10, width=70)
         self.outlog.grid(column=2, row=3)
 
-        try:  # Select a table by default. Fails if we couldn't iterate over tables.
-            self._table_click(table_name)
-        except AttributeError:
-            self.outlog.insert("Found no tables in the database")
-
-    def _table_click(self, table_name: str):
+    def _table_click(self, table_name: str, mode:ViewModes=ViewModes.TABLE):
         """ Runs when clicking any table button. """
         self.title(f"{root_title} | {table_name}")
-        self.model = Models[table_name]
-        self.queryset: QuerySet = self.model.objects
+
+        if mode is ViewModes.VIEW:
+            self.model = self.queryset = None  # Remove outdated values from last mode.
+            self.tablemodel.createEmptyModel()  # Remove existing content from the model.
+            self.db_cursor.execute(f"SHOW COLUMNS FROM {table_name}")
+            columnnames = *(names[0] for names in self.db_cursor),
+            self.db_cursor.execute(f"SELECT * FROM {table_name}")
+            # Absolutely terrible! It would appear that tkintertables can't handle decimal values.
+            data = {i: dict(zip(columnnames, (str(n) if n is not None else n for n in values))) for i, values in enumerate(self.db_cursor)}
+            self.tablemodel.importDict(data)
+            self.commitbutton.config(state=tk.DISABLED)  # Disables the commit function when showing view results.
+        else:
+            self.model = Models[table_name]
+            self.queryset: QuerySet = self.model.objects
+            self.tablemodel.change_queryset(self.queryset)
+            self.commitbutton.config(state=tk.NORMAL)  # Re-enable commit functionality when showing tables.
 
         self.rowtable.destroy()  # Reinstating the table seems to work best.
-        self.tablemodel.change_queryset(self.queryset)
         self.rowtable = OrmTableCanvas(self.rowframe, model=self.tablemodel)
         self.rowtable.show()
         self.rowtable.autoResizeColumns()

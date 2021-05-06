@@ -30,7 +30,7 @@ CREATE TABLE `Category` (
   UNIQUE KEY `CategoryID_UNIQUE` (`CategoryID`),
   KEY `storageid_idx` (`storageid`),
   CONSTRAINT `storageid` FOREIGN KEY (`storageid`) REFERENCES `Storage` (`StorageID`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -39,7 +39,6 @@ CREATE TABLE `Category` (
 
 LOCK TABLES `Category` WRITE;
 /*!40000 ALTER TABLE `Category` DISABLE KEYS */;
-INSERT INTO `Category` VALUES (1,6,'Electronics'),(2,NULL,'Stuff'),(3,13,'Things');
 /*!40000 ALTER TABLE `Category` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -57,7 +56,7 @@ CREATE TABLE `Customer` (
   `PhoneNumber` int unsigned NOT NULL,
   PRIMARY KEY (`CustomerID`),
   UNIQUE KEY `CustomerID_UNIQUE` (`CustomerID`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -66,7 +65,6 @@ CREATE TABLE `Customer` (
 
 LOCK TABLES `Customer` WRITE;
 /*!40000 ALTER TABLE `Customer` DISABLE KEYS */;
-INSERT INTO `Customer` VALUES (1,'Simon','Lærer',13371337),(2,'Konrad','Sommer',12345678),(3,'Fornavn','Efternavn',34645654),(4,'Coolguy','Niceman',87645457);
 /*!40000 ALTER TABLE `Customer` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -85,7 +83,7 @@ CREATE TABLE `Item` (
   UNIQUE KEY `ItemID_UNIQUE` (`ItemID`),
   KEY `categoryid_idx` (`categoryid`),
   CONSTRAINT `categoryid` FOREIGN KEY (`categoryid`) REFERENCES `Category` (`CategoryID`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -94,7 +92,6 @@ CREATE TABLE `Item` (
 
 LOCK TABLES `Item` WRITE;
 /*!40000 ALTER TABLE `Item` DISABLE KEYS */;
-INSERT INTO `Item` VALUES (1,NULL,'Cykel'),(2,NULL,'Sten'),(3,NULL,'Grus'),(4,NULL,'Kage'),(5,NULL,'Gamer PC'),(6,NULL,'Gamer Headset'),(7,NULL,'Gamer Mus');
 /*!40000 ALTER TABLE `Item` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -139,7 +136,7 @@ CREATE TABLE `ItemPurchase` (
   KEY `purchaseorderid_idx` (`purchaseorderid`),
   CONSTRAINT `itemid` FOREIGN KEY (`itemid`) REFERENCES `Item` (`ItemID`),
   CONSTRAINT `purchaseorderid` FOREIGN KEY (`purchaseorderid`) REFERENCES `PurchaseOrder` (`PurchaseOrderID`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -148,24 +145,8 @@ CREATE TABLE `ItemPurchase` (
 
 LOCK TABLES `ItemPurchase` WRITE;
 /*!40000 ALTER TABLE `ItemPurchase` DISABLE KEYS */;
-INSERT INTO `ItemPurchase` VALUES (1,1,2,13),(2,2,2,25),(3,3,2,12),(4,3,3,1),(5,5,3,2),(6,3,4,3),(7,2,4,4),(8,1,4,5);
 /*!40000 ALTER TABLE `ItemPurchase` ENABLE KEYS */;
 UNLOCK TABLES;
-
---
--- Temporary view structure for view `ItemPurchaseWithName`
---
-
-DROP TABLE IF EXISTS `ItemPurchaseWithName`;
-/*!50001 DROP VIEW IF EXISTS `ItemPurchaseWithName`*/;
-SET @saved_cs_client     = @@character_set_client;
-/*!50503 SET character_set_client = utf8mb4 */;
-/*!50001 CREATE VIEW `ItemPurchaseWithName` AS SELECT 
- 1 AS `Name`,
- 1 AS `Quantity`,
- 1 AS `Received`,
- 1 AS `ReceivedDate`*/;
-SET character_set_client = @saved_cs_client;
 
 --
 -- Table structure for table `Order`
@@ -183,7 +164,7 @@ CREATE TABLE `Order` (
   UNIQUE KEY `OrderID_UNIQUE` (`OrderID`),
   KEY `customerid_idx` (`customerid`),
   CONSTRAINT `customerid` FOREIGN KEY (`customerid`) REFERENCES `Customer` (`CustomerID`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -192,23 +173,8 @@ CREATE TABLE `Order` (
 
 LOCK TABLES `Order` WRITE;
 /*!40000 ALTER TABLE `Order` DISABLE KEYS */;
-INSERT INTO `Order` VALUES (1,1,0,0),(2,2,0,0),(3,3,0,0);
 /*!40000 ALTER TABLE `Order` ENABLE KEYS */;
 UNLOCK TABLES;
-
---
--- Temporary view structure for view `OrderItemCount`
---
-
-DROP TABLE IF EXISTS `OrderItemCount`;
-/*!50001 DROP VIEW IF EXISTS `OrderItemCount`*/;
-SET @saved_cs_client     = @@character_set_client;
-/*!50503 SET character_set_client = utf8mb4 */;
-/*!50001 CREATE VIEW `OrderItemCount` AS SELECT 
- 1 AS `itemid`,
- 1 AS `amount`,
- 1 AS `Name`*/;
-SET character_set_client = @saved_cs_client;
 
 --
 -- Table structure for table `Orderline`
@@ -228,7 +194,7 @@ CREATE TABLE `Orderline` (
   KEY `orderid_idx` (`orderid`),
   CONSTRAINT `orderid` FOREIGN KEY (`orderid`) REFERENCES `Order` (`OrderID`) ON DELETE RESTRICT,
   CONSTRAINT `orderline_itemid` FOREIGN KEY (`itemid`) REFERENCES `Item` (`ItemID`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -237,7 +203,6 @@ CREATE TABLE `Orderline` (
 
 LOCK TABLES `Orderline` WRITE;
 /*!40000 ALTER TABLE `Orderline` DISABLE KEYS */;
-INSERT INTO `Orderline` VALUES (1,2,1,25),(2,3,1,1),(3,4,1,23),(4,2,2,3);
 /*!40000 ALTER TABLE `Orderline` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -254,7 +219,7 @@ CREATE TABLE `PurchaseOrder` (
   `ReceivedDate` date DEFAULT NULL,
   PRIMARY KEY (`PurchaseOrderID`),
   UNIQUE KEY `PurchaseOrderID_UNIQUE` (`PurchaseOrderID`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -263,7 +228,6 @@ CREATE TABLE `PurchaseOrder` (
 
 LOCK TABLES `PurchaseOrder` WRITE;
 /*!40000 ALTER TABLE `PurchaseOrder` DISABLE KEYS */;
-INSERT INTO `PurchaseOrder` VALUES (2,0,NULL),(3,0,NULL),(4,0,NULL);
 /*!40000 ALTER TABLE `PurchaseOrder` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -279,7 +243,7 @@ CREATE TABLE `Storage` (
   `RoomNumber` int unsigned NOT NULL,
   PRIMARY KEY (`StorageID`),
   UNIQUE KEY `StorageID_UNIQUE` (`StorageID`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -288,45 +252,8 @@ CREATE TABLE `Storage` (
 
 LOCK TABLES `Storage` WRITE;
 /*!40000 ALTER TABLE `Storage` DISABLE KEYS */;
-INSERT INTO `Storage` VALUES (6,6),(13,8),(14,5),(15,10);
 /*!40000 ALTER TABLE `Storage` ENABLE KEYS */;
 UNLOCK TABLES;
-
---
--- Final view structure for view `ItemPurchaseWithName`
---
-
-/*!50001 DROP VIEW IF EXISTS `ItemPurchaseWithName`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8mb4 */;
-/*!50001 SET character_set_results     = utf8mb4 */;
-/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `ItemPurchaseWithName` AS select `Item`.`Name` AS `Name`,`ItemPurOrder`.`Quantity` AS `Quantity`,`ItemPurOrder`.`Received` AS `Received`,`ItemPurOrder`.`ReceivedDate` AS `ReceivedDate` from ((select `ItemPurchase`.`itemid` AS `itemid`,`ItemPurchase`.`Quantity` AS `Quantity`,`PurchaseOrder`.`Received` AS `Received`,`PurchaseOrder`.`ReceivedDate` AS `ReceivedDate` from (`ItemPurchase` join `PurchaseOrder`) where (`ItemPurchase`.`purchaseorderid` = `PurchaseOrder`.`PurchaseOrderID`)) `ItemPurOrder` join `Item`) where (`ItemPurOrder`.`itemid` = `Item`.`ItemID`) */;
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
-
---
--- Final view structure for view `OrderItemCount`
---
-
-/*!50001 DROP VIEW IF EXISTS `OrderItemCount`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8mb4 */;
-/*!50001 SET character_set_results     = utf8mb4 */;
-/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `OrderItemCount` AS select `subquery`.`itemid` AS `itemid`,`subquery`.`amount` AS `amount`,`item`.`Name` AS `Name` from (`Item` `item` left join (select `ol`.`itemid` AS `itemid`,sum(`ol`.`Quantity`) AS `amount` from `Orderline` `ol` group by `ol`.`itemid`) `subquery` on((`subquery`.`itemid` = `item`.`ItemID`))) */;
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -337,4 +264,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2021-05-05 14:55:10
+-- Dump completed on 2021-04-21 12:01:50
