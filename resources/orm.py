@@ -1,16 +1,18 @@
 """
 Stores database data and queryset models.
 """
-from copy import copy
 
 if __name__ == '__main__':
-    # Gently remind the user to not run utils.py themselves
+    # Gently remind the user to not run program.py themselves
     raise SystemExit("(⊙＿⊙') Wha!?... Are you trying to run orm.py?\n"
                      " You know this is a bad idea; right? You should run app.py instead :)")
 
 from typing import Type, Dict, List, Any, Tuple, Union, Set
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
+from copy import copy
+from resources.enums import FieldTypes
+from resources.exceptions import AbstractInstantiationError
 
 CONNECTION: MySQLConnection = None
 CURSOR: CMySQLCursor = None
@@ -58,7 +60,7 @@ class QuerySet:
         if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}.")
 
         # Check for NOT NULL fields that arent specified.
-        missing_required = next((field.name for field in self.model.Meta.fields if field.attrs[1] == 'NO' and field.attrs[2] != 'PRI' and field.name not in kwargs.keys()), None)
+        missing_required = next((field.name for field in self.model.Meta.fields if field.attrs[1] == 'NO' and field.type != 'PRI' and field.name not in kwargs.keys()), None)
         if missing_required: raise AttributeError(f"Cannot create {self.model} object without a value for {missing_required}")
 
         instance = self.model(**kwargs)  # Create the instance before we save it.
@@ -71,14 +73,16 @@ class QuerySet:
 class ModelField:
     """ Represents metadata for a column in the database, holds its name and other attributes. """
     name: str = None
-    attrs: tuple = None  # A tuple of metadata; such as whether the column is a primary key.
+    byte_type: bytes = None  # Holds something about the byte type of this field.
+    no: str = None  # No idea what this means as of yet.
+    type: str = None  # Describes whether this field is a foreignkey, primary key or neither.
+    attrs: tuple = None  # A tuple of additional metadata.
 
     def __init__(self, column: tuple) -> None:
         super().__init__()
-        self.name, *self.attrs = column
+        self.name, self.byte_type, self.no, self.type, *self.attrs = column
 
-    def __str__(self) -> str:
-        return self.name
+    def __str__(self) -> str: return self.name
 
 
 class _DBModelMeta(type):
@@ -100,10 +104,15 @@ class DBModel(metaclass=_DBModelMeta):
     model = None
     values: Dict[str, Any] = None  # Holds the values of the instances.
     _initial_values: Dict[str, Any] = None  # Holds the initial values for comparison when saving.
-    __pk: int = None  # pk is private as it must not be changed.
+
+    # NOTE Encapsulation: __getting is private (hidden), and cannot be reached from outside its class.
+    __getting = [False, ]  # True when the overloaded __getattribute__ methods should be ignored, used to prevent recursion.
 
     def __init__(self, *args, zipped_data: zip = None, **kwargs) -> None:
         """ Accepts multiple ways to pass model instance data. """
+        if type(self) is DBModel:  # NOTE Abstraction: This exceptions prevents creation of instances of the base class.
+            raise AbstractInstantiationError("Cannot instantiate instances of DBModel itself, use subclasses instead.")
+
         # Allow a more readable way to access the class itself from its instances.
         self.model: Type[DBModel] = self.__class__
 
@@ -127,7 +136,6 @@ class DBModel(metaclass=_DBModelMeta):
 
         # We run these assignments sequentially,
         # to ensure that the primary key is removed from the dictionary, before it is copied.
-        self.__pk = self.values.pop(self.Meta.pk_column, None)
         self._initial_values = copy(self.values)
 
         super().__init__()
@@ -135,7 +143,7 @@ class DBModel(metaclass=_DBModelMeta):
     @property
     def pk(self) -> int:
         """ Returns the value of the current instance's primary key. """
-        return self.__pk
+        return self.values.get(self.Meta.pk_column, None)
 
     def save(self) -> None:  # TODO Kevin: Test save.
         """ Saves or updates the current instance in the database. """
@@ -166,6 +174,17 @@ class DBModel(metaclass=_DBModelMeta):
     def __str__(self) -> str:
         """ :return: The class name paired with its primary key, when referring to an instance. Otherwise returns super. """
         return f"{self.__class__.__name__} object ({self.pk})" if self.pk else super(DBModel, self).__str__()
+
+    def __getattribute__(self, name: str, getting=__getting) -> Any:
+        return super().__getattribute__(name)
+        """ Lazily queries related foreignkey rows. """
+        if not getting[0]:  # TODO Kevin: Perhaps find a less impactful way to accomplish this than overriding __getattribute__.
+            with IndexChangedTo(getting, True):
+                if name in self.values and type(self.values[name]) is int and next((field for field in self.Meta.fields if field.type is FieldTypes.FOREIGN_KEY and field.name == name), None):
+                    pass  # TODO Kevin: Query the related table for the related row.
+                return getattr(self, name)
+        else:
+            return super().__getattribute__(name)
 
 
 Models: Dict[str, Type[DBModel]] = {}
@@ -205,7 +224,7 @@ def init_orm() -> Dict[str, Type[DBModel]]:
             'column_data': columns,
         }
 
-        setattr(model, 'Meta', type('Meta', (DBModel.Meta,), metadata))
+        model.Meta = type('Meta', (DBModel.Meta,), metadata)
 
         # Once we're finished with the current model, we add it to the dictionary with will hold them all.
         Models[name] = model  # We use typehinting to indicate attributes that cannot be inferred from our generic type.

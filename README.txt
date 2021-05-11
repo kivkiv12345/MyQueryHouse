@@ -10,3 +10,6 @@ To do this; perform the following from the command line:
 -> Execute: "source env/bin/activate"
 -> Execute: "pip3 install -r requirements.txt"
 -> Execute: "python3 app.py"
+
+Run unit_tests.py to run the unit tests:
+-> Execute "python3 unit_tests.py"

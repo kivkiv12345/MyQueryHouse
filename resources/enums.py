@@ -18,3 +18,14 @@ class ViewModes(Enum):
     """ Enum to hold different types of tables to show in the table button list. """
     TABLE   = 'BASE TABLE'
     VIEW    = 'VIEW'
+
+
+class FieldTypes(Enum):
+    """ Enum to hold the different types of fields a ModelField may be of. """
+    FOREIGN_KEY = 'MUL'
+    PRIMARY_KEY = 'PRI'
+
+
+class SysArgs(Enum):
+    """ Holds the different arguments that may be passed when running app.py """
+    UNIT_TEST = 'unittests'

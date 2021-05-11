@@ -1,38 +1,16 @@
 """ This file contains user defined widgets, that are to be situated inside tk instances. """
-import traceback
 
 if __name__ == '__main__':
     raise SystemExit("...and let it be known through revelation; that those who make attempts to run 'widgets.py directly'"
                      "must be thought a fool, for trying run run a file which is obviously only used to store widgets...")
 
+import traceback
 import tkinter as tk
-from typing import Tuple
+from typing import Tuple, Union
 from resources import orm
 from frozendict import frozendict
 from resources.enums import ViewModes
-
-
-class NotReadOnlyWidget:
-    """ Provides a clean way to temporarily edit read-only widgets using the 'with' statement. """
-
-    widget: tk.Widget = None
-    initial_state: str = None
-
-    def __init__(self, widget: tk.Widget) -> None:
-        """ :param widget: The widget which should be opened for editing. """
-        super().__init__()
-        self.widget = widget
-        try: self.initial_state = widget['state']  # Attempt to retrieve and store the initial state of the widget.
-        except (TypeError, AttributeError): pass  # Use a default value later on, if this fails.
-
-    def __enter__(self):
-        """ Open the widget for editing while inside 'with' statement. """
-        self.widget.config(state=tk.NORMAL)
-
-    def __exit__(self, exc_type=None, exc_val=None, exc_tb=None):
-        """Restore the widget to its initial state (or disabled state, if the original state could not be retrieved)."""
-        self.widget.config(state=self.initial_state or tk.DISABLED)
-        del self
+from resources.utils import NotReadOnlyWidget, TkUtilWidget
 
 
 class VerticalScrolledFrame(tk.Frame):  # Shamelessly stolen from: https://stackoverflow.com/questions/31762698/dynamic-button-with-scrollbar-in-tkinter-python
@@ -154,3 +132,46 @@ class OutputLog(tk.Text):
         """ Inserting into the output log, should automatically crete newlines (and print to console). """
         with NotReadOnlyWidget(self): super().insert(index, chars + ('\n' if newline else ''), *args)
         if to_console: print(chars)
+
+
+class MessageRoot(TkUtilWidget):
+    txtbox: tk.Text = None
+    answerframe: tk.Frame = None
+
+    def __init__(self, message: str, initial_txt='', screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
+        super().__init__(screenName, baseName, className, useTk, sync, use)
+
+        tk.Label(self, text=message).pack()
+        self.txtbox = tk.Text(self, width=50, wrap=tk.WORD)
+        self.txtbox.insert(tk.INSERT, initial_txt)
+        self.txtbox.pack()
+
+        # Adjust the height of the textbox to fit the SQL.
+        newheigt = self.txtbox.tk.call((self.txtbox._w, "count", "-update", "-displaylines", "1.0", "end"))
+        self.txtbox.configure(height=min(20, newheigt+3))
+
+        self.answerframe = tk.Frame(self)
+
+        tk.Button(self.answerframe, text='Yes', command=lambda _=None: self.destroy(True)).grid(column=0, row=0)
+        tk.Button(self.answerframe, text='No', command=lambda _=None: self.destroy(True)).grid(column=1, row=0)
+
+        self.answerframe.pack()
+
+        self.bind('<Return>', self._check_enter)  # ENTER should confirm the user input.
+
+    def _check_enter(self, event):
+        """ Only simulates clicking yes, if the text widget is not in focus. """
+        if self.focus_get() is not self.txtbox: self.destroy(True)
+
+
+def ask_text_answer(message: str, initial_txt='') -> Union[str, None]:
+    """
+    Prompts the user for a yes/no answer, while also allowing them to edit the returned text answer.
+    :return: None when cancelled, text when accepted.
+    """
+
+    msgbox = MessageRoot(message, initial_txt)
+
+    msgbox.mainloop()
+
+    return msgbox.txtbox.get("1.0", "end-1c")

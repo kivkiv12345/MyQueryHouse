@@ -19,6 +19,9 @@
 -- Table structure for table `Category`
 --
 
+CREATE DATABASE IF NOT EXISTS `myqueryhouse`;
+USE `myqueryhouse`;
+
 DROP TABLE IF EXISTS `Category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -79,12 +82,9 @@ DROP TABLE IF EXISTS `Item`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Item` (
   `ItemID` int unsigned NOT NULL AUTO_INCREMENT,
-  `categoryid` int unsigned DEFAULT NULL,
   `Name` varchar(45) NOT NULL,
   PRIMARY KEY (`ItemID`),
-  UNIQUE KEY `ItemID_UNIQUE` (`ItemID`),
-  KEY `categoryid_idx` (`categoryid`),
-  CONSTRAINT `categoryid` FOREIGN KEY (`categoryid`) REFERENCES `Category` (`CategoryID`) ON DELETE SET NULL
+  UNIQUE KEY `ItemID_UNIQUE` (`ItemID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -94,7 +94,7 @@ CREATE TABLE `Item` (
 
 LOCK TABLES `Item` WRITE;
 /*!40000 ALTER TABLE `Item` DISABLE KEYS */;
-INSERT INTO `Item` VALUES (1,NULL,'Cykel'),(2,NULL,'Sten'),(3,NULL,'Grus'),(4,NULL,'Kage'),(5,NULL,'Gamer PC'),(6,NULL,'Gamer Headset'),(7,NULL,'Gamer Mus');
+INSERT INTO `Item` VALUES (1,'Cykel'),(2,'Sten'),(3,'Grus'),(4,'Kage'),(5,'Gamer PC'),(6,'Gamer Headset'),(7,'Gamer Mus');
 /*!40000 ALTER TABLE `Item` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -108,7 +108,11 @@ DROP TABLE IF EXISTS `ItemMtmCategory`;
 CREATE TABLE `ItemMtmCategory` (
   `itemid` int unsigned NOT NULL,
   `categoryid` int unsigned NOT NULL,
-  PRIMARY KEY (`itemid`,`categoryid`)
+  PRIMARY KEY (`itemid`,`categoryid`),
+  KEY `categoryid_idx` (`categoryid`),
+  KEY `mtm_categoryid_idx` (`categoryid`),
+  CONSTRAINT `mtm_categoryid` FOREIGN KEY (`categoryid`) REFERENCES `Category` (`CategoryID`),
+  CONSTRAINT `mtm_itemid` FOREIGN KEY (`itemid`) REFERENCES `Item` (`ItemID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -279,7 +283,7 @@ CREATE TABLE `Storage` (
   `RoomNumber` int unsigned NOT NULL,
   PRIMARY KEY (`StorageID`),
   UNIQUE KEY `StorageID_UNIQUE` (`StorageID`)
-) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -288,7 +292,7 @@ CREATE TABLE `Storage` (
 
 LOCK TABLES `Storage` WRITE;
 /*!40000 ALTER TABLE `Storage` DISABLE KEYS */;
-INSERT INTO `Storage` VALUES (6,6),(13,8),(14,5),(15,10);
+INSERT INTO `Storage` VALUES (6,6),(13,8),(14,5),(16,11),(17,12),(18,13);
 /*!40000 ALTER TABLE `Storage` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -337,4 +341,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2021-05-05 14:55:10
+-- Dump completed on 2021-05-06 12:10:52

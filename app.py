@@ -1,13 +1,15 @@
 try:
+    import sys
     import tkinter as tk
+    import docker
     from tkinter.scrolledtext import ScrolledText
     from typing import Callable
     from frozendict import frozendict
     from mysql.connector import ProgrammingError
-    from resources.enums import KeyModes
+    from resources.enums import KeyModes, SysArgs
     from multiprocessing import Process
     from mysql import connector
-    from resources.utils import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
+    from resources.program import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
     from resources import orm
 except ModuleNotFoundError as e:
     raise SystemExit(f"""
@@ -43,7 +45,16 @@ def bind_modifiers(widget, event:Callable, button='Button-1',
 
 if __name__ == '__main__':
 
+    # Check for invalid arguments passed to the program.
+    if invalid_args := set(sys.argv[1:]).difference(SysArgs.UNIT_TEST.__dict__.values()):
+        raise EnvironmentError(f"Invalid arguments passed to app.py: {invalid_args}")
+
     while True:
+        # Database connection options loop.
+        while True:
+            # Prompt the user for a desired database location.
+            break
+
         # Login screen loop.
         login = LoginBox()
         while True:

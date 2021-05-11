@@ -1,0 +1,2 @@
+class AbstractInstantiationError(Exception):
+    pass
