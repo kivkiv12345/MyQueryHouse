@@ -46,7 +46,7 @@ def bind_modifiers(widget, event:Callable, button='Button-1',
 if __name__ == '__main__':
 
     # Check for invalid arguments passed to the program.
-    if invalid_args := set(sys.argv[1:]).difference(SysArgs.UNIT_TEST.__dict__.values()):
+    if invalid_args := set(sys.argv[1:]).difference({enum.value for enum in SysArgs}):
         raise EnvironmentError(f"Invalid arguments passed to app.py: {invalid_args}")
 
     while True:
@@ -68,7 +68,14 @@ if __name__ == '__main__':
 
         orm.CURSOR = orm.CONNECTION.cursor()
 
-        orm.init_orm()
+        # Override methods for __len__ and __str__ in created DBModels
+        def dbmodel_len(self): return len(str(self.pk))
+        def dbmodel_str(self): return str(self.pk)
+
+        orm.init_orm({
+            '__len__': dbmodel_len,
+            '__str__': dbmodel_str,
+        })
 
         try:  # Prompt the user to create the database, should it be absent.
             orm.CURSOR.execute(f"USE {DATABASE_NAME}")

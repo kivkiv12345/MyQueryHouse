@@ -48,7 +48,7 @@ class IndexChangedTo:
 
 class LazyQueryDict(dict):
     """ This dictionary subclass lazily queries related foreignkey rows when retrieved. """
-    instance = None
+    __instance = None  # instance is private, as it should not be included when values are retrieved.
 
     def __init__(self, instance, **kwargs) -> None:
         """
@@ -56,22 +56,24 @@ class LazyQueryDict(dict):
         :param kwargs: Keyword arguments passed to the original dictionary constructor.
         """
         super().__init__(**kwargs)
-        self.instance: DBModel = instance
+        self.__instance: DBModel = instance
 
     def __getitem__(self, k: Any, getting=[False, ]) -> Any:
         """
         Checks the value and type of the specified key to determine
         if a query should be performed before the value is returned.
         :param k: the specified key to retrieve the value of.
-        :param getting: A mutable default argument we use to determine of the overridden functionality should be ignored.
+        :param getting: A mutable default argument we use to determine if the overridden functionality should be ignored.
             It should very much be impossible to assign this variable to anything other than its default value.
         """
-        if not getting[0]:  # TODO Kevin: Perhaps find a less impactful way to accomplish this than overriding __getitem__.
+        if not getting[0]:
             with IndexChangedTo(getting, True):
                 if k in self and type(self[k]) is int and next(
-                        (field for field in self.instance.Meta.fields if
+                        (field for field in self.__instance.Meta.fields if
                          field.type == FieldTypes.FOREIGN_KEY.value and field.name == k), None):
-                    self[k] = 'hej'  # TODO Kevin: Query the related table for the related row.
+                    model = self.__instance.model
+                    fk_names = _foreignkey_relationships[model.Meta.table_name][k]
+                    self[k] = Models[fk_names[0]].objects.get(**{fk_names[1]: self[k]})
         return super().__getitem__(k)
 
     def _fetch_all(self) -> None:  # TODO Kevin: Consider whether this method should be converted to an annotation.
@@ -119,7 +121,7 @@ class QuerySet:
         self._evaluated = True
         return self
 
-    def get(self, **kwargs):  # TODO Kevin: Do some stuff with kwargs.
+    def get(self, **kwargs):
         if not kwargs:
             raise ValueError("No conditions specified for QuerySet.get")
 
@@ -128,7 +130,7 @@ class QuerySet:
 
         current_table: str = self.model.Meta.table_name
         CURSOR.execute(f"SELECT * FROM {DATABASE_NAME}.{current_table} WHERE {'AND'.join(('{} = {}'.format(key, value) for key, value in kwargs.items()))}")
-        buffer = [Models[current_table](obj) for obj in CURSOR]
+        buffer: List[DBModel] = [Models[current_table](obj) for obj in CURSOR]
 
         if len(buffer) < 1:
             raise Exception("Get did not return any results.")
@@ -136,6 +138,7 @@ class QuerySet:
             raise Exception("Get returned more than one result.")
 
         self._result, self._evaluated = buffer, True
+        return buffer[0]
 
     def __iter__(self):
         if not self._evaluated: self.evaluate()
@@ -144,7 +147,7 @@ class QuerySet:
 
     def create(self, **kwargs):
         """ Creates an instance of the specified model, saves it to the database, and returns it to the user. """
-        invalid_field = next((field for field in kwargs.keys() if field not in self.model.fields), None)
+        invalid_field = next((field for field in kwargs.keys() if field not in self.model.values.keys()), None)
         if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}.")
 
         # Check for NOT NULL fields that arent specified.
@@ -269,14 +272,19 @@ class DBModel(metaclass=_DBModelMeta):
 
 
 Models: Dict[str, Type[DBModel]] = {}
+_foreignkey_relationships: Dict[str, Dict[str, Tuple[str, str]]] = {}
 
 
-def init_orm() -> Dict[str, Type[DBModel]]:
+def init_orm(model_overrides: dict=None) -> Dict[str, Type[DBModel]]:
     """
     Populates the global Models dictionary with models matching tables in the database.
     Ought to only ever be run once during the app startup.
+    :param model_overrides: Used to describe attributes that should be overridden in generated subclasses.
     :return: The populated Models dictionary.
     """
+    if not CURSOR or not CONNECTION:
+        raise SystemExit("A successful connection to the database must be established before the ORM may be initialized")
+
     global Models  # Make a reference to the global Models dictionary.
 
     CURSOR.execute(f"USE {DATABASE_NAME}")
@@ -294,7 +302,7 @@ def init_orm() -> Dict[str, Type[DBModel]]:
 
         # Declare the new model, and populate it with attributes.
         # The fields dictionary will hold the values contained within an instance of the model.
-        model = type(name, (DBModel,), {})
+        model = type(name, (DBModel,), model_overrides or {})
 
         # We add Meta to the model after declaration, such that it may refer back to its model.
         metadata = {
@@ -309,5 +317,32 @@ def init_orm() -> Dict[str, Type[DBModel]]:
 
         # Once we're finished with the current model, we add it to the dictionary with will hold them all.
         Models[name] = model  # We use typehinting to indicate attributes that cannot be inferred from our generic type.
+
+    # Populate the global _foreignkey_relationships dictionary.
+    global _foreignkey_relationships
+
+    # Get all foreignkey relationships in the database.
+    CURSOR.execute("""
+        SELECT
+            TABLE_NAME,
+            COLUMN_NAME,
+            CONSTRAINT_NAME,
+            REFERENCED_TABLE_NAME,
+            REFERENCED_COLUMN_NAME
+        FROM
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE
+            REFERENCED_TABLE_SCHEMA = 'myqueryhouse'
+    """)
+
+    for row in CURSOR:
+        if row[0] in _foreignkey_relationships:
+            _foreignkey_relationships[row[0]].update({row[1]: (row[3], row[4])})
+        else:
+            _foreignkey_relationships[row[0]] = {row[1]: (row[3], row[4])}
+
+    test = Models['Category'].objects.get(**{Models['Category'].Meta.pk_column: 1})
+
+    print(str(test))
 
     return Models
