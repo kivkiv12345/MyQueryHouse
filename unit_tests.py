@@ -16,8 +16,13 @@ class TestOrm(unittest.TestCase):
         self.assertTrue('FOO'.isupper())
         self.assertFalse('Foo'.isupper())"""
 
+    # TODO Kevin: Find some way to populate the orm and test QuerySet exceptions,
+    #  preferably done via a docker container debug database or something.
+
+    # TODO Kevin: Check that foreignkey IDs are converted to DBModels, on a test database.
+
     def test_dbmodel(self):
-        # check that instantiating DBModels raises an AbstractInstantiationError.
+        """ Check that instantiating DBModels raises an AbstractInstantiationError. """
         with self.assertRaises(AbstractInstantiationError): DBModel()
 
 

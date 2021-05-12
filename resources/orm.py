@@ -7,7 +7,7 @@ if __name__ == '__main__':
     raise SystemExit("(⊙＿⊙') Wha!?... Are you trying to run orm.py?\n"
                      " You know this is a bad idea; right? You should run app.py instead :)")
 
-from typing import Type, Dict, List, Any, Tuple, Union, Set
+from typing import Type, Dict, List, Any, Tuple, Union, ItemsView, ValuesView
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
 from copy import copy
@@ -20,6 +20,76 @@ CURSOR: CMySQLCursor = None
 DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoration file!
 
 
+class IndexChangedTo:
+    """
+    Temporarily changes the value of an index in a list to match the specified value.
+    For use in combination with the 'with' statement.
+    """
+    lst: list = None
+    value: Any = None
+    _index: int = None
+    _original_value: Any = None
+
+    def __init__(self, lst, value, index=0) -> None:
+        """
+        :param lst: The list in which to change a value.
+        :param value: The value to replace the current one with.
+        :param index: The index of the of the value to change.
+        """
+        super().__init__()
+        self.lst, self.value, self._original_value, self._index = lst, value, lst[index], index
+
+    def __enter__(self):
+        self.lst[self._index] = self.value
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.lst[self._index] = self._original_value
+
+
+class LazyQueryDict(dict):
+    """ This dictionary subclass lazily queries related foreignkey rows when retrieved. """
+    instance = None
+
+    def __init__(self, instance, **kwargs) -> None:
+        """
+        :param instance: The instance of a DBModel subclass that this dictionary is linked to.
+        :param kwargs: Keyword arguments passed to the original dictionary constructor.
+        """
+        super().__init__(**kwargs)
+        self.instance: DBModel = instance
+
+    def __getitem__(self, k: Any, getting=[False, ]) -> Any:
+        """
+        Checks the value and type of the specified key to determine
+        if a query should be performed before the value is returned.
+        :param k: the specified key to retrieve the value of.
+        :param getting: A mutable default argument we use to determine of the overridden functionality should be ignored.
+            It should very much be impossible to assign this variable to anything other than its default value.
+        """
+        if not getting[0]:  # TODO Kevin: Perhaps find a less impactful way to accomplish this than overriding __getitem__.
+            with IndexChangedTo(getting, True):
+                if k in self and type(self[k]) is int and next(
+                        (field for field in self.instance.Meta.fields if
+                         field.type == FieldTypes.FOREIGN_KEY.value and field.name == k), None):
+                    self[k] = 'hej'  # TODO Kevin: Query the related table for the related row.
+        return super().__getitem__(k)
+
+    def _fetch_all(self) -> None:  # TODO Kevin: Consider whether this method should be converted to an annotation.
+        """ Prefetches all contained foreignkeys. """
+        for key in self.keys():
+            self[key]  # Forces the foreignkey to be evaluated.
+
+    def values(self) -> ValuesView[Any]:
+        """ Preemptively evaluates all contained foreignkeys before returning super. """
+        self._fetch_all()
+        return super().values()
+
+    def items(self) -> ItemsView[str, Any]:
+        """ Preemptively evaluates all contained foreignkeys before returning super. """
+        self._fetch_all()
+        return super().items()
+
+
 class QuerySet:
     """
     Django'esque queryet class which allows for retrieving a list of models from the database.
@@ -27,7 +97,7 @@ class QuerySet:
     """
     model = None
     _evaluated = False
-    _query_result: list = None
+    _result: list = None
 
     def __init__(self, model) -> None:
         """
@@ -35,7 +105,7 @@ class QuerySet:
         """
         super().__init__()
         self.model: Type[DBModel] = model
-        self._query_result: List[DBModel] = []
+        self._result: List[DBModel] = []
 
         self.evaluate()  # TODO Kevin: Remember that queries are to be lazy.
 
@@ -45,13 +115,31 @@ class QuerySet:
         except Exception: pass
         current_table: str = self.model.Meta.table_name
         CURSOR.execute(f"SELECT * FROM {DATABASE_NAME}.{current_table}")
-        self._query_result = [Models[current_table](obj) for obj in CURSOR]
+        self._result = [Models[current_table](obj) for obj in CURSOR]
         self._evaluated = True
         return self
 
+    def get(self, **kwargs):  # TODO Kevin: Do some stuff with kwargs.
+        if not kwargs:
+            raise ValueError("No conditions specified for QuerySet.get")
+
+        try: CONNECTION.consume_results()
+        except Exception: pass
+
+        current_table: str = self.model.Meta.table_name
+        CURSOR.execute(f"SELECT * FROM {DATABASE_NAME}.{current_table} WHERE {'AND'.join(('{} = {}'.format(key, value) for key, value in kwargs.items()))}")
+        buffer = [Models[current_table](obj) for obj in CURSOR]
+
+        if len(buffer) < 1:
+            raise Exception("Get did not return any results.")
+        elif len(buffer) > 1:
+            raise Exception("Get returned more than one result.")
+
+        self._result, self._evaluated = buffer, True
+
     def __iter__(self):
         if not self._evaluated: self.evaluate()
-        for instance in self._query_result:
+        for instance in self._result:
             yield instance
 
     def create(self, **kwargs):
@@ -61,7 +149,7 @@ class QuerySet:
 
         # Check for NOT NULL fields that arent specified.
         missing_required = next((field.name for field in self.model.Meta.fields if field.attrs[1] == 'NO' and field.type != 'PRI' and field.name not in kwargs.keys()), None)
-        if missing_required: raise AttributeError(f"Cannot create {self.model} object without a value for {missing_required}")
+        if missing_required: raise AttributeError(f"Cannot create {self.model} object without a value for {missing_required}.")
 
         instance = self.model(**kwargs)  # Create the instance before we save it.
         instance.save()  # TODO Kevin: Get the primary key from the database when done.
@@ -105,11 +193,15 @@ class DBModel(metaclass=_DBModelMeta):
     values: Dict[str, Any] = None  # Holds the values of the instances.
     _initial_values: Dict[str, Any] = None  # Holds the initial values for comparison when saving.
 
-    # NOTE Encapsulation: __getting is private (hidden), and cannot be reached from outside its class.
-    __getting = [False, ]  # True when the overloaded __getattribute__ methods should be ignored, used to prevent recursion.
-
     def __init__(self, *args, zipped_data: zip = None, **kwargs) -> None:
-        """ Accepts multiple ways to pass model instance data. """
+        """
+        Accepts multiple ways to pass model instance data. Use either: args, zipped_data or kwargs when
+        constructing instances of DBModel subclasses.
+        :param args: Positional arguments that should be ordered in accordance with the fields and their order.
+        :param zipped_data: A zip object which pairs field names with their values.
+        :param kwargs: Keyword arguments that pairs field names with their values.
+        """
+
         if type(self) is DBModel:  # NOTE Abstraction: This exceptions prevents creation of instances of the base class.
             raise AbstractInstantiationError("Cannot instantiate instances of DBModel itself, use subclasses instead.")
 
@@ -120,7 +212,7 @@ class DBModel(metaclass=_DBModelMeta):
         if kwargs:
             invalid_field = next((field for field in kwargs.keys() if field not in {metafield.name for metafield in self.Meta.fields}), None)
             if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}")
-            self.values = kwargs
+            self.values = LazyQueryDict(self, **kwargs)
         else:
             # Zip the data correctly, such that we pair column names with their values.
             data = zipped_data or zip(self.Meta.fieldnames, *args) or {field: None for field in self.Meta.fieldnames}
@@ -132,7 +224,7 @@ class DBModel(metaclass=_DBModelMeta):
             if invalid_fields: raise AttributeError(f"{invalid_fields} are not valid fields for {self.model}")
 
             # Merge the values into the class.
-            self.values = datadict
+            self.values = LazyQueryDict(self, **datadict)
 
         # We run these assignments sequentially,
         # to ensure that the primary key is removed from the dictionary, before it is copied.
@@ -174,17 +266,6 @@ class DBModel(metaclass=_DBModelMeta):
     def __str__(self) -> str:
         """ :return: The class name paired with its primary key, when referring to an instance. Otherwise returns super. """
         return f"{self.__class__.__name__} object ({self.pk})" if self.pk else super(DBModel, self).__str__()
-
-    def __getattribute__(self, name: str, getting=__getting) -> Any:
-        return super().__getattribute__(name)
-        """ Lazily queries related foreignkey rows. """
-        if not getting[0]:  # TODO Kevin: Perhaps find a less impactful way to accomplish this than overriding __getattribute__.
-            with IndexChangedTo(getting, True):
-                if name in self.values and type(self.values[name]) is int and next((field for field in self.Meta.fields if field.type is FieldTypes.FOREIGN_KEY and field.name == name), None):
-                    pass  # TODO Kevin: Query the related table for the related row.
-                return getattr(self, name)
-        else:
-            return super().__getattribute__(name)
 
 
 Models: Dict[str, Type[DBModel]] = {}

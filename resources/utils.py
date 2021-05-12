@@ -2,15 +2,12 @@
 This module holds the utility methods and classes used by MyQueryHouse.
 """
 
-from tkintertable import TableModel
-from resources.enums import FieldTypes
-from resources.orm import QuerySet, DBModel
-
 if __name__ == '__main__':
     raise SystemExit("Cannot run utils.py")
 
 import tkinter as tk
-from typing import Any
+from tkintertable import TableModel
+from resources.orm import QuerySet
 
 
 class TkUtilWidget(tk.Tk):
@@ -27,50 +24,6 @@ class TkUtilWidget(tk.Tk):
     def __str__(self):
         """ Prevent Tkinter from displaying the name as . """
         return object.__str__(self)
-
-
-class IndexChangedTo:
-    """ Temporarily changes the value of an index in a list to match the specified value. """
-    lst: list = None
-    value: Any = None
-    _index: int = None
-    _original_value: Any = None
-
-    def __init__(self, lst, value, index=0) -> None:
-        """
-        :param lst: The list in which to change a value.
-        :param value: The value to replace the current one with.
-        :param index: The index of the of the value to change.
-        """
-        super().__init__()
-        self.lst, self.value, self._original_value, self._index = lst, value, lst[index], index
-
-    def __enter__(self):
-        self.lst[self._index] = self.value
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.lst[self._index] = self._original_value
-
-
-class LazyQueryDict(dict):
-    """ This dictionary subclass lazily queries related foreignkey rows when retrieved. """
-    __getting = [False, ]
-    instance = None
-
-    def __init__(self, instance) -> None:
-        super().__init__()
-        self.instance: DBModel = instance
-
-    def __getitem__(self, k: Any, getting=__getting) -> Any:
-        if not getting[0]:  # TODO Kevin: Perhaps find a less impactful way to accomplish this than overriding __getitem__.
-            with IndexChangedTo(getting, True):
-                if k in self and type(self[k]) is int and next(
-                        (field for field in self.instance.Meta.fields if
-                         field.type is FieldTypes.FOREIGN_KEY and field.name == k), None):
-                    return 'hej'  # TODO Kevin: Query the related table for the related row.
-                return super().__getitem__(k)
-        else:
-            return super().__getitem__(k)
 
 
 class NotReadOnlyWidget:

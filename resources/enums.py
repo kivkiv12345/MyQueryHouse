@@ -29,3 +29,9 @@ class FieldTypes(Enum):
 class SysArgs(Enum):
     """ Holds the different arguments that may be passed when running app.py """
     UNIT_TEST = 'unittests'
+
+
+class DatabaseLocations(Enum):
+    """ Describes possible locations of the program database. """
+    LOCAL   = 1
+    DOCKER  = 2
