@@ -1,12 +1,16 @@
+""" This module handles the main program loop, as in; it determines when certain windows and widgets appear. """
+
 try:
     import sys
-    import tkinter as tk
     import docker
+    import tkinter as tk
+    from docker.errors import NotFound
+    from tkinter.messagebox import askyesno
     from tkinter.scrolledtext import ScrolledText
     from typing import Callable
     from frozendict import frozendict
-    from mysql.connector import ProgrammingError
-    from resources.enums import KeyModes, SysArgs
+    from mysql.connector import ProgrammingError, DatabaseError
+    from resources.enums import KeyModes, SysArgs, DatabaseLocations
     from multiprocessing import Process
     from mysql import connector
     from resources.program import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
@@ -49,21 +53,15 @@ if __name__ == '__main__':
     if invalid_args := set(sys.argv[1:]).difference({enum.value for enum in SysArgs}):
         raise EnvironmentError(f"Invalid arguments passed to app.py: {invalid_args}")
 
-    while True:
-        # Database connection options loop.
-        while True:
-            # Prompt the user for a desired database location.
-            break
+    while True:  # Loop the entire program.
 
-        # Login screen loop.
         login = LoginBox()
-        while True:
+        while True:  # Login screen loop.
             login.mainloop()
-            try:
-                # Use the login details stored in our login widget for the MySQL connection.
+            try: # Use the login details stored in our login widget for the MySQL connection.
                 orm.CONNECTION = connector.connect(**login.logindeets)
                 break
-            except ProgrammingError as e:
+            except (ProgrammingError, DatabaseError) as e:
                 login = LoginBox(e.msg)
 
         orm.CURSOR = orm.CONNECTION.cursor()

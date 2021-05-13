@@ -1,5 +1,5 @@
 """
-This module holds the different UIs that appear while the program progresses through its main loop.
+This module holds the different UIs that appear while the program progresses through its main loop in app.py.
 """
 
 if __name__ == '__main__':
@@ -7,7 +7,10 @@ if __name__ == '__main__':
     raise SystemExit("(⊙＿⊙') Wha!?... Are you trying to run program.py?\n"
                      " You do know it's only used to store utilities; right? You should run app.py instead :)")
 
+import docker
 import tkinter as tk
+from time import sleep
+from docker.errors import NotFound
 from typing import Set, Dict, Tuple, List, Type
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
@@ -17,16 +20,15 @@ from frozendict import frozendict
 from copy import deepcopy
 from mysql.connector import ProgrammingError
 from resources import orm  # Module wide import needed to specify CONNECTION and CURSOR from orm.
-from resources.orm import Models, DBModel, QuerySet
+from resources.orm import Models, DBModel, QuerySet, DATABASE_NAME
 from datetime import datetime
 from tkinter.messagebox import askyesno
 from resources.widgets import VerticalScrolledFrame, OutputLog, SwitchViewModeButton
-from resources.enums import ViewModes
-from resources.utils import TkUtilWidget, OrmTableModel
+from resources.enums import ViewModes, DatabaseLocations
+from resources.utils import TkUtilWidget, OrmTableModel, CreateToolTip
 
 # VARS
 root_title = "MyQueryHouse | MySQL Connector Program"
-DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoration file!
 
 
 # Classes
@@ -35,20 +37,62 @@ class LoginBox(TkUtilWidget):
     Used to prompt the user for login details.
     Provided information may be retrieved in the 'logindeets' dictionary.
     """
-    logindeets: dict = None
+    logindeets: dict = None  # This dictionary will be unpacked to keyword arguments, and used to connect to the database later.
 
+    # Local database widgets
     host_input: tk.Entry = None
     user_input: tk.Entry = None
+
     password_input: tk.Entry = None
 
-    def _confirm(self, *args):
-        self.logindeets = {
-            'host': self.host_input.get(),
-            'user': self.user_input.get(),
-            'passwd': self.password_input.get()
-        }
+    # Docker database widgets
+    name_input: tk.Entry = None
+    port_input: tk.Entry = None
 
-        self.destroy(True)
+    location: DatabaseLocations = None
+
+    def _confirm(self, *args):
+        assert isinstance(self.location, DatabaseLocations), "Invalid stated database location when confirming connection details."
+
+        if self.location is DatabaseLocations.LOCAL:
+            self.logindeets = {
+                'host': self.host_input.get(),
+                'user': self.user_input.get(),
+                'passwd': self.password_input.get(),
+            }
+        elif self.location is DatabaseLocations.DOCKER:
+            assert self.port_input.get().isnumeric(), "Provided port number may only be numeric."
+
+            self.logindeets = {
+                'host': '127.0.0.1',
+                'user': 'root',
+                'passwd': self.password_input.get(),
+                'port': int(self.port_input.get()),
+            }
+
+            client = docker.from_env()
+            try:  # Try to get a docker container with the specified name.
+                container = client.containers.get(self.name_input.get())
+            except NotFound:  # Ask for permission to create the container, should we fail to find it.
+                if askyesno("Create container", "A docker container with the specified name could not be found.\n"
+                                                "Would you like for it to be created?"):
+                    client.images.pull('mysql')  # Make sure the image is pulled beforehand, to decrease the variation in startup time.
+                    container = client.containers.run(
+                        'mysql',  # TODO Kevin: Image should change depending on database engine.
+                        name=f"{DATABASE_NAME}_db",
+                        environment=[f"MYSQL_ROOT_PASSWORD={self.logindeets['passwd']}"],
+                        ports={f"3306/tcp": int(self.logindeets['port'])},
+                        detach=True,
+                    )
+                else:
+                    raise SystemExit("Permission denied to create dockerized database.")  # TODO Kevin: Perhaps restart the program here?
+
+            container.start()  # Ensure that the container is started.
+            tk.Label(self, text="Please wait while we give the docker container some time to start...").pack()
+            self.update()  # Force the window to update, such that our message will show.
+            sleep(8)
+
+        self.destroy(True)  # Destroy the window following confirmation and allow the program to continue.
 
     def __init__(self, failed_connection:str=False, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
@@ -58,23 +102,56 @@ class LoginBox(TkUtilWidget):
         if failed_connection:
             tk.Label(self, text=f"Connection to server failed, stating: \n{failed_connection},\nPlease try again.").pack()
 
-        hostdefault = tk.StringVar(); hostdefault.set("localhost")
-        tk.Label(self, text="Connection server").pack()
-        self.host_input = tk.Entry(self, text=hostdefault)
-        self.host_input.pack()
+        # Prompt the user as to if they want their database to be dockerized.
+        # Enters 'if' when user accepts the database to be dockerized.
+        if askyesno("Dockerize Database", "Should the database be dockerized?\n"
+                                          "This will create or connect to a container with your specified options."):
 
-        userdefault = tk.StringVar(); userdefault.set("root")
-        tk.Label(self, text="Connection user").pack()
-        self.user_input = tk.Entry(self, text=userdefault)
-        self.user_input.pack()
+            # Assign a globally accessible reference to the selected database location.
+            self.location = orm.database_location = DatabaseLocations.DOCKER
 
-        tk.Label(self, text="Connection password").pack()
-        self.password_input = tk.Entry(self, show="*")
-        self.password_input.pack()
-        self.password_input.focus_set()
+            # Setup of a container name Entry widget.
+            namedefault = tk.StringVar(); namedefault.set(f"{DATABASE_NAME}_db")
+            tk.Label(self, text="Container name").pack()
+            self.name_input = tk.Entry(self, text=namedefault); self.name_input.pack()
+            CreateToolTip(self.name_input, "Determines the name of the created container.")
+
+            # Setup of a password Entry widget.
+            passworddefault = tk.StringVar(); passworddefault.set("Test1234!")
+            tk.Label(self, text="Database password").pack()
+            self.password_input = tk.Entry(self, text=passworddefault); self.password_input.pack()
+            CreateToolTip(self.password_input, "Determines the password which will be used to connect to the dockerized database.")
+
+            # Setup of a port Entry widget.
+            portdefault = tk.StringVar(); portdefault.set("5506")
+            portlabel = tk.Label(self, text="Container port"); portlabel.pack()
+            self.port_input = tk.Entry(self, text=portdefault); self.port_input.pack()  # TODO Kevin: Make input number only.
+            CreateToolTip(self.port_input, "Determines which port should be forwarded to the docker container.")
+
+        else:  # Runs when the user wants to connect to a local database.
+
+            # Assign a globally accessible reference to the selected database location.
+            self.location = orm.database_location = DatabaseLocations.LOCAL
+
+            # Setup of an Entry widget for the database server IP.
+            hostdefault = tk.StringVar(); hostdefault.set("localhost")
+            tk.Label(self, text="Connection server").pack()
+            self.host_input = tk.Entry(self, text=hostdefault)
+            self.host_input.pack()
+
+            # Setup of an Entry widget for the database user widget.
+            userdefault = tk.StringVar(); userdefault.set("root")
+            tk.Label(self, text="Connection user").pack()
+            self.user_input = tk.Entry(self, text=userdefault)
+            self.user_input.pack()
+
+            # Setup of an Entry widget for the database password widget.
+            tk.Label(self, text="Connection password").pack()
+            self.password_input = tk.Entry(self, show="*")
+            self.password_input.pack()
+            self.password_input.focus_set()
 
         tk.Button(self, text='Confirm settings', command=self._confirm).pack()
-
         self.bind('<Return>', self._confirm)  # ENTER should confirm the user input.
 
 

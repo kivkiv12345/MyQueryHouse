@@ -11,13 +11,14 @@ from typing import Type, Dict, List, Any, Tuple, Union, ItemsView, ValuesView
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor_cext import CMySQLCursor
 from copy import copy
-from resources.enums import FieldTypes
+from resources.enums import FieldTypes, DatabaseLocations
 from resources.exceptions import AbstractInstantiationError
 
 CONNECTION: MySQLConnection = None
 CURSOR: CMySQLCursor = None
 
 DATABASE_NAME = "myqueryhouse"  # Must match the name of the database restoration file!
+database_location: DatabaseLocations = None
 
 
 class IndexChangedTo:
@@ -108,8 +109,6 @@ class QuerySet:
         super().__init__()
         self.model: Type[DBModel] = model
         self._result: List[DBModel] = []
-
-        self.evaluate()  # TODO Kevin: Remember that queries are to be lazy.
 
     def evaluate(self):
         """ Performs the query and caches the result. """
