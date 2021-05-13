@@ -63,6 +63,7 @@ class LazyQueryDict(dict):
         """
         Checks the value and type of the specified key to determine
         if a query should be performed before the value is returned.
+
         :param k: the specified key to retrieve the value of.
         :param getting: A mutable default argument we use to determine if the overridden functionality should be ignored.
             It should very much be impossible to assign this variable to anything other than its default value.
@@ -278,6 +279,7 @@ def init_orm(model_overrides: dict=None) -> Dict[str, Type[DBModel]]:
     """
     Populates the global Models dictionary with models matching tables in the database.
     Ought to only ever be run once during the app startup.
+
     :param model_overrides: Used to describe attributes that should be overridden in generated subclasses.
     :return: The populated Models dictionary.
     """

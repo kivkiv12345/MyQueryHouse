@@ -52,6 +52,7 @@ class LoginBox(TkUtilWidget):
     location: DatabaseLocations = None
 
     def _confirm(self, *args):
+        """ Runs when confirming provided parameters. """
         assert isinstance(self.location, DatabaseLocations), "Invalid stated database location when confirming connection details."
 
         if self.location is DatabaseLocations.LOCAL:
@@ -73,13 +74,15 @@ class LoginBox(TkUtilWidget):
             client = docker.from_env()
             try:  # Try to get a docker container with the specified name.
                 container = client.containers.get(self.name_input.get())
-            except NotFound:  # Ask for permission to create the container, should we fail to find it.
+                just_started = not container.attrs['State']['Running']
+            except NotFound:  # Ask for permission to create the container, should we fail to find an existing one.
+                just_started = True
                 if askyesno("Create container", "A docker container with the specified name could not be found.\n"
                                                 "Would you like for it to be created?"):
                     client.images.pull('mysql')  # Make sure the image is pulled beforehand, to decrease the variation in startup time.
                     container = client.containers.run(
                         'mysql',  # TODO Kevin: Image should change depending on database engine.
-                        name=f"{DATABASE_NAME}_db",
+                        name=self.name_input.get(),
                         environment=[f"MYSQL_ROOT_PASSWORD={self.logindeets['passwd']}"],
                         ports={f"3306/tcp": int(self.logindeets['port'])},
                         detach=True,
@@ -87,10 +90,11 @@ class LoginBox(TkUtilWidget):
                 else:
                     raise SystemExit("Permission denied to create dockerized database.")  # TODO Kevin: Perhaps restart the program here?
 
-            container.start()  # Ensure that the container is started.
-            tk.Label(self, text="Please wait while we give the docker container some time to start...").pack()
-            self.update()  # Force the window to update, such that our message will show.
-            sleep(8)
+            if just_started:  # Wait a bit for the container and database to start; if needed.
+                container.start()  # Ensure that the container is started.
+                tk.Label(self, text="Please wait while we give the docker container some time to start...").pack()
+                self.update()  # Force the window to update, such that our message will show.
+                sleep(8)
 
         self.destroy(True)  # Destroy the window following confirmation and allow the program to continue.
 
@@ -157,45 +161,52 @@ class LoginBox(TkUtilWidget):
 
 class CreateDatabaseMessage(TkUtilWidget):
     """
-    Will be initialized if the project database couldn't be found on the desired MySQL server.
+    Will be instantiated if the project database couldn't be found on the desired MySQL server.
     Asks the user if the want the database to be automatically created and populated with data.
     """
     pop_db_checkbox: tk.Checkbutton = None
     populate_db: tk.BooleanVar = None
 
     # We store the MySQL connection details in this class, such that the database may be created here as well.
-    db_name: str = None
+    logindeets: dict = None
     db_cursor: CMySQLCursor = None
     db_connection: MySQLConnection = None
-    db_password:str = None
 
-    def _confirm(self, *args):
+    def _confirm(self, *_):
+
+        try: self.db_cursor.execute(f"CREATE DATABASE {DATABASE_NAME}")  # Apparently can't pass db_name as a positional argument when creating a database ¯\_(ツ)_/¯
+        except ProgrammingError: pass  # The database probably already exists, which is fine by us (unless we want to wipe it first).
+
+        # Run a command which will load the contents of a .sql file into an existing database.
+        # This seems to be the best we can do for now; ideally we would create it as well.
+
+        restore_db_args = ('-h', '127.0.0.7', '-P', str(self.logindeets['port'])) \
+            if orm.database_location is DatabaseLocations.DOCKER else ('-h', self.logindeets['host'])
+
         try:
-            try: self.db_cursor.execute(f"CREATE DATABASE {self.db_name}")  # Apparently can't pass db_name as a positional argument when creating a database ¯\_(ツ)_/¯
-            except ProgrammingError: pass  # The database probably already exists, which is fine by us (unless we want to wipe it first).
-
-            # Run a command which will load the contents of a .sql file into an existing database.
-            # This seems to be the best we can do for now; ideally we would create it as well.
             with open(f"database_backups/{DATABASE_NAME}{'(empty)' if not self.populate_db.get() else ''}.sql") as db_file:
-                call(["mysql", "-u", "root", f"--password={self.db_password}", DATABASE_NAME], stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+                # The following command populates the database according to the opened .sql file.
+                call(["mysql", "-u", "root", f"--password={self.logindeets['passwd']}", DATABASE_NAME, *restore_db_args], stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
         except ProgrammingError as e:
             print(f"Failed to restore database from {DATABASE_NAME}.sql; stating: '{e}',\ndoes the file exist?")
 
-        self.db_cursor.execute(f"USE {self.db_name}")  # Use the database, regardless of how it was created.
+        self.db_cursor.execute(f"USE {DATABASE_NAME}")  # Use the database, regardless of how it was created.
 
         self.destroy(True)  # Destroy this widget, and progress to the next.
 
-    def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, db_password:str, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
+    def __init__(self, logindeets:dict, db_cursor:CMySQLCursor, db_connection:MySQLConnection, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
 
-        self.db_name, self.db_cursor, self.db_connection, self.db_password = db_name, db_cursor, db_connection, db_password
+        self.db_cursor, self.db_connection = db_cursor, db_connection
+        self.logindeets = {**{'host': None, 'user': None, 'passwd': None, }, **logindeets}
 
-        self.title(f"Create database {db_name}")
-        tk.Label(self, text=f"A database called '{db_name}' could not be found on the server,\n"
+        self.title(f"Create database {DATABASE_NAME}")
+        tk.Label(self, text=f"A database called '{DATABASE_NAME}' could not be found on the server,\n"
                             f"This database must be created before the program can continue.\n").pack()
 
         self.populate_db = tk.BooleanVar()
-        self.pop_db_checkbox = tk.Checkbutton(self, text=f"Should the database be prepopulated with filler data?\nContents will be read from '{db_name}.sql'", variable=self.populate_db)
+        self.pop_db_checkbox = tk.Checkbutton(self, text=f"Should the database be prepopulated with filler data?\n"
+                                                         f"Contents will be read from 'database_backups/{DATABASE_NAME}.sql'", variable=self.populate_db)
         self.pop_db_checkbox.select()
         self.pop_db_checkbox.pack()
 

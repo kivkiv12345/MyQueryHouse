@@ -66,6 +66,12 @@ if __name__ == '__main__':
 
         orm.CURSOR = orm.CONNECTION.cursor()
 
+        try:  # Prompt the user to create the database, should it be absent.
+            orm.CURSOR.execute(f"USE {DATABASE_NAME}")
+        except ProgrammingError:  # Assume the database to not exist, if we cannot use it.
+            newdbmsg = CreateDatabaseMessage(login.logindeets, orm.CURSOR, orm.CONNECTION)
+            newdbmsg.mainloop()
+
         # Override methods for __len__ and __str__ in created DBModels
         def dbmodel_len(self): return len(str(self.pk))
         def dbmodel_str(self): return str(self.pk)
@@ -74,12 +80,6 @@ if __name__ == '__main__':
             '__len__': dbmodel_len,
             '__str__': dbmodel_str,
         })
-
-        try:  # Prompt the user to create the database, should it be absent.
-            orm.CURSOR.execute(f"USE {DATABASE_NAME}")
-        except ProgrammingError:  # Assume the database to not exist, if we cannot use it.
-            newdbmsg = CreateDatabaseMessage(DATABASE_NAME, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
-            newdbmsg.mainloop()
 
         root = MainDBView(DATABASE_NAME, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
 
