@@ -1,0 +1,1 @@
+Refactor acquisition and release of database connections and cursors

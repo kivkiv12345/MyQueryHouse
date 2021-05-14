@@ -5,9 +5,14 @@ This module holds the utility methods and classes used by MyQueryHouse.
 if __name__ == '__main__':
     raise SystemExit("Cannot run utils.py")
 
+import docker
 import tkinter as tk
-from tkintertable import TableModel
+from time import sleep
+from typing import Union, Literal
 from resources.orm import QuerySet
+from tkintertable import TableModel
+from docker.errors import APIError, NotFound
+from docker.models.containers import Container
 
 
 class TkUtilWidget(tk.Tk):
@@ -137,3 +142,32 @@ class CreateToolTip(object):  # Taken from: https://stackoverflow.com/questions/
         self.tw= None
         if tw:
             tw.destroy()
+
+
+class TempDockerContainer:
+    """ Temporarily keeps a Docker running, and ensures its deleted afterwards. """
+
+    container: Container = None
+
+    def __init__(self, container: Container) -> None:
+        """
+        :param container: The Docker container to keep running inside the with statement.
+        """
+        super().__init__()
+        self.container = container
+
+    def __enter__(self):
+        self.container.start()
+        if not self.container.attrs['State']['Running']:
+            print(f"Waiting for container with name: '{self.container.name}' to start.")
+            sleep(5)
+        return self.container
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            self.container.stop()
+            self.container.remove()
+        except (NotFound, APIError):
+            pass  # Container is most likely already deleted, happens when the container has auto_remove set to True.
+
+

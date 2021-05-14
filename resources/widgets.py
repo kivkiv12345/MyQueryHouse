@@ -1,4 +1,5 @@
 """ This file contains user defined widgets, that are to be situated inside tk instances. """
+from resources.orm import DATABASE_NAME
 
 if __name__ == '__main__':
     raise SystemExit("...and let it be known through revelation; that those who make attempts to run 'widgets.py directly'"
@@ -9,8 +10,8 @@ import tkinter as tk
 from typing import Tuple, Union
 from resources import orm
 from frozendict import frozendict
-from resources.enums import ViewModes
-from resources.utils import NotReadOnlyWidget, TkUtilWidget
+from resources.enums import ViewModes, DatabaseLocations
+from resources.utils import NotReadOnlyWidget, TkUtilWidget, CreateToolTip
 
 
 class VerticalScrolledFrame(tk.Frame):  # Shamelessly stolen from: https://stackoverflow.com/questions/31762698/dynamic-button-with-scrollbar-in-tkinter-python
@@ -162,6 +163,71 @@ class MessageRoot(TkUtilWidget):
     def _check_enter(self, event):
         """ Only simulates clicking yes, if the text widget is not in focus. """
         if self.focus_get() is not self.txtbox: self.destroy(True)
+
+
+class LoginModeWidget(tk.Frame):
+    """
+    Collects the widgets used to connect to either a normal or dockerized database into a single frame.
+    __init__ parameter allows for switching between modes.
+    """
+
+    # Local database widgets
+    host_input: tk.Entry = None
+    user_input: tk.Entry = None
+
+    password_input: tk.Entry = None
+
+    # Docker database widgets
+    name_input: tk.Entry = None
+    port_input: tk.Entry = None
+
+    def __init__(self, mode:DatabaseLocations, master=None, cnf={}, **kw):
+        super().__init__(master, cnf, **kw)
+
+        if mode is DatabaseLocations.DOCKER:
+            tk.Label(self, text="Connecting to a dockerized database.").pack()
+
+            # Setup of a container name Entry widget.
+            (namedefault := tk.StringVar()).set(f"{DATABASE_NAME}_db")
+            tk.Label(self, text="Container name").pack()
+            self.name_input = tk.Entry(self, text=namedefault); self.name_input.pack()
+            CreateToolTip(self.name_input, "Determines the name of the created container.")
+
+            # Setup of a password Entry widget.
+            (passworddefault := tk.StringVar()).set("Test1234!")
+            tk.Label(self, text="Database password").pack()
+            self.password_input = tk.Entry(self, text=passworddefault); self.password_input.pack()
+            CreateToolTip(self.password_input,
+                          "Determines the password which will be used to connect to the dockerized database.")
+
+            # Setup of a port Entry widget.
+            (portdefault := tk.StringVar()).set("5506")
+            tk.Label(self, text="Container port").pack()
+            self.port_input = tk.Entry(self, text=portdefault); self.port_input.pack()  # TODO Kevin: Make input number only.
+            CreateToolTip(self.port_input, "Determines which port should be forwarded to the docker container.")
+
+        elif mode is DatabaseLocations.LOCAL:  # Runs when the user wants to connect to a local database.
+            tk.Label(self, text="Connecting to a normal database.").pack()
+
+            # Setup of an Entry widget for the database server IP.
+            (hostdefault := tk.StringVar()).set("localhost")
+            tk.Label(self, text="Connection server").pack()
+            self.host_input = tk.Entry(self, text=hostdefault)
+            self.host_input.pack()
+
+            # Setup of an Entry widget for the database user widget.
+            (userdefault := tk.StringVar()).set("root")
+            tk.Label(self, text="Connection user").pack()
+            self.user_input = tk.Entry(self, text=userdefault)
+            self.user_input.pack()
+
+            # Setup of an Entry widget for the database password widget.
+            tk.Label(self, text="Connection password").pack()
+            self.password_input = tk.Entry(self, show="*"); self.password_input.pack()
+            self.password_input.focus_set()
+
+        else:
+            raise ValueError("Invalid mode provided to LoginModeWidget.")
 
 
 def ask_text_answer(message: str, initial_txt='') -> Union[str, None]:

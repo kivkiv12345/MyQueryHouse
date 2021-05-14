@@ -145,6 +145,10 @@ class QuerySet:
         for instance in self._result:
             yield instance
 
+    def __len__(self):
+        if not self._evaluated: self.evaluate()
+        return len(self._result)
+
     def create(self, **kwargs):
         """ Creates an instance of the specified model, saves it to the database, and returns it to the user. """
         invalid_field = next((field for field in kwargs.keys() if field not in self.model.values.keys()), None)
@@ -181,6 +185,7 @@ class _DBModelMeta(type):
     Black magic metaclass; which in our case allows us to specify properties,
     that are provided classes instead of instances when called on classes themselves.
     """
+
     @property
     def objects(cls) -> QuerySet:
         """ :return: A lazy queryset which may be altered before eventually being evaluated when iterated over (for example). """
@@ -270,6 +275,12 @@ class DBModel(metaclass=_DBModelMeta):
         """ :return: The class name paired with its primary key, when referring to an instance. Otherwise returns super. """
         return f"{self.__class__.__name__} object ({self.pk})" if self.pk else super(DBModel, self).__str__()
 
+    def __eq__(self, o: object) -> bool:
+        try:
+            return self.Meta.table_name == o.Meta.table_name and self.pk == o.pk and self.values == o.values
+        except AttributeError:
+            return False
+
 
 Models: Dict[str, Type[DBModel]] = {}
 _foreignkey_relationships: Dict[str, Dict[str, Tuple[str, str]]] = {}
@@ -342,8 +353,7 @@ def init_orm(model_overrides: dict=None) -> Dict[str, Type[DBModel]]:
         else:
             _foreignkey_relationships[row[0]] = {row[1]: (row[3], row[4])}
 
-    test = Models['Category'].objects.get(**{Models['Category'].Meta.pk_column: 1})
-
-    print(str(test))
+    # TODO Kevin: Temporarily kept as an example of kept method of filtering on pk, should probably change in the future.
+    #test = Models['Category'].objects.get(**{Models['Category'].Meta.pk_column: 1})
 
     return Models

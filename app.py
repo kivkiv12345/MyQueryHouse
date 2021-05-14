@@ -17,8 +17,8 @@ try:
     from resources import orm
 except ModuleNotFoundError as e:
     raise SystemExit(f"""
-    ٩(^‿^)۶ Hey there, some import failed; stating: '{e}'.\n
-    This most likely happened because you have missing dependencies. 
+    ٩(^‿^)۶ Hey there, some imports failed; stating: '{e}'.\n
+    This most likely happened due to missing dependencies.
     Assuming you're located in the directory of app.py,
     this can easily be fixed by running:
     'pip3 install -r requirements.txt'.\n
