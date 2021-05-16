@@ -1,10 +1,19 @@
 """ This module handles the main program loop, as in; it determines when certain windows and widgets appear. """
 
+import sys
+import os
+if os.name == 'nt':
+    # Windows is a bloated piece of broken garbage code,
+    # which can't detect installed packages when running from command line!
+    # So we must tell it where to find them... *sigh*
+    conf_path = os.getcwd()
+    sys.path.append(conf_path)
+    sys.path.append(conf_path + r'\env\Lib\site-packages')
+    # Appending the packages like this; means we assume the program is running from a virtual environment called 'env'.
+
 try:
-    import sys
-    import docker
+    import traceback
     import tkinter as tk
-    from docker.errors import NotFound
     from tkinter.messagebox import askyesno
     from tkinter.scrolledtext import ScrolledText
     from typing import Callable
@@ -16,6 +25,7 @@ try:
     from resources.program import DATABASE_NAME, LoginBox, CreateDatabaseMessage, VerticalScrolledFrame, MainDBView
     from resources import orm
 except ModuleNotFoundError as e:
+    traceback.print_exc()
     raise SystemExit(f"""
     ٩(^‿^)۶ Hey there, some imports failed; stating: '{e}'.\n
     This most likely happened due to missing dependencies.
@@ -25,7 +35,8 @@ except ModuleNotFoundError as e:
     You might want to do this in virtual environment though, which can be made with:
     'python3 -m venv env',\n
     You must now activate it by typing:
-    'source env/bin/activate' :)
+    (on Linux)   'source env/bin/activate'
+    (on Windows) 'env/Scripts/activate' :)
     """)
 
 
@@ -81,7 +92,7 @@ if __name__ == '__main__':
             '__str__': dbmodel_str,
         })
 
-        root = MainDBView(DATABASE_NAME, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
+        root = MainDBView(login.logindeets, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
 
         root.mainloop()
 

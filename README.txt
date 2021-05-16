@@ -5,12 +5,20 @@ The application is intended to be run from the command line (ideally using a vir
 To do this; perform the following from the command line:
 -> Navigate to the directory of MyQueryHouse/
 -> Execute: "python3 -m venv env"
--> Execute: "source env/bin/activate"
+-> Execute: (Linux)	"source env/bin/activate"
+	    (Windows)	"env\Scripts\activate"
 -> Execute: "pip3 install -r requirements.txt"
 -> Execute: "python3 app.py"
 
 The application also includes unit tests, perform the following to run them:
 -> Execute "python3 unit_tests.py"
+
+Running the program from the command prompt on Windows,
+seems to cause the Docker API to fail.
+This is supposedly fixed by running:
+-> "python <path-to-python-env>\Scripts\pywin32_postinstall.py -install",
+but this script may fail too, due to a lacking dependency called 'pywintypes'.
+Source: "https://github.com/twosixlabs/armory/issues/156"
 
 
 In terms of boring afterthoughts:

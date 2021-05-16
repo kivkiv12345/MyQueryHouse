@@ -3,7 +3,6 @@ Run this module to perform the preconfigured unit tests for MyQueryHouse.
 """
 from typing import Type
 
-import docker
 import unittest
 from resources import orm
 from docker.errors import NotFound

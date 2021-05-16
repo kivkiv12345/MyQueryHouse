@@ -78,7 +78,7 @@ class VerticalScrolledFrame(tk.Frame):  # Shamelessly stolen from: https://stack
 
         try:
             self.master._table_click(table_name, mode)
-        except IndexError:
+        except UnboundLocalError:
             self.master.outlog.insert(f"Found no {mode.value}s in the database.")
 
         return table_names

@@ -9,7 +9,11 @@ if __name__ == '__main__':
 
 from typing import Type, Dict, List, Any, Tuple, Union, ItemsView, ValuesView
 from mysql.connector.connection import MySQLConnection
-from mysql.connector.cursor_cext import CMySQLCursor
+try:
+    from mysql.connector.cursor_cext import CMySQLCursor
+except ImportError:
+    # Importation of CMySQLCursor fails on Windows, for some reason.
+    CMySQLCursor = None  # Avoid typehint NameError on failed import.
 from copy import copy
 from resources.enums import FieldTypes, DatabaseLocations
 from resources.exceptions import AbstractInstantiationError

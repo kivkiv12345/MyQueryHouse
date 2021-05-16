@@ -1,6 +1,7 @@
 """
 This module holds the different UIs that appear while the program progresses through its main loop in app.py.
 """
+import os
 
 if __name__ == '__main__':
     # Gently remind the user to not run program.py themselves
@@ -10,12 +11,16 @@ if __name__ == '__main__':
 import docker
 import tkinter as tk
 from time import sleep
-from docker.errors import NotFound
+from docker.errors import NotFound, DockerException
 from resources.exceptions import RetryError
 from typing import Set, Dict, Tuple, List, Type
 from mysql.connector.connection import MySQLConnection
-from mysql.connector.cursor_cext import CMySQLCursor
-from subprocess import DEVNULL, call
+try:
+    from mysql.connector.cursor_cext import CMySQLCursor
+except ImportError:
+    # Importation of CMySQLCursor fails on Windows, for some reason.
+    CMySQLCursor = None  # Avoid typehint NameError on failed import.
+from subprocess import DEVNULL, call, run
 from tkintertable import TableCanvas
 from frozendict import frozendict
 from copy import deepcopy
@@ -26,11 +31,12 @@ from datetime import datetime
 from tkinter.messagebox import askyesno
 from resources.widgets import VerticalScrolledFrame, OutputLog, SwitchViewModeButton, LoginModeWidget
 from resources.enums import ViewModes, DatabaseLocations
-from resources.utils import TkUtilWidget, OrmTableModel, CreateToolTip
+from resources.utils import TkUtilWidget, OrmTableModel, CreateToolTip, restore_database
 
 # VARS
 root_title = "MyQueryHouse | MySQL Connector Program"
 
+container_name: str = None
 
 # Classes
 class LoginBox(TkUtilWidget):
@@ -63,7 +69,7 @@ class LoginBox(TkUtilWidget):
                 'passwd': self.logininputframe.password_input.get(),
             }
         elif self.location is DatabaseLocations.DOCKER:
-            assert self.logininputframe.port_input.get().isnumeric(), "Provided port number may only be numeric."
+            assert self.logininputframe.port_input.get().isnumeric(), "Provided port number must be numeric."
 
             self.logindeets = {
                 'host': '127.0.0.1',
@@ -74,7 +80,8 @@ class LoginBox(TkUtilWidget):
 
             client = docker.from_env()
             try:  # Try to get a docker container with the specified name.
-                container = client.containers.get(self.logininputframe.name_input.get())
+                global container_name
+                container = client.containers.get((container_name := self.logininputframe.name_input.get()))
                 just_started = not container.attrs['State']['Running']
             except NotFound:  # Ask for permission to create the container, should we fail to find an existing one.
                 just_started = True
@@ -118,6 +125,14 @@ class LoginBox(TkUtilWidget):
         tk.Button(self, text='Confirm settings', command=self._confirm).pack()
         self.bind('<Return>', self._confirm)  # ENTER should confirm the user input.
 
+        try:  # Inform the user about their possible lack of a Docker installation.
+            docker.from_env()
+        except DockerException as e:
+            tk.messagebox.showerror("Docker connection failure", f"Could not retrieve a docker client, stating:\n{e}."
+                                                              f"\n\nIs Docker installed?")
+            # Seems like Entry widgets break when after showing an error, so we bail and exit the program.
+            raise SystemExit("Exiting program due to a lacking docker installation.")
+
 
 class CreateDatabaseMessage(TkUtilWidget):
     """
@@ -133,21 +148,17 @@ class CreateDatabaseMessage(TkUtilWidget):
 
     def _confirm(self, *_):
 
-        try: self.db_cursor.execute(f"CREATE DATABASE {DATABASE_NAME}")  # Apparently can't pass db_name as a positional argument when creating a database ¯\_(ツ)_/¯
-        except ProgrammingError: pass  # The database probably already exists, which is fine by us (unless we want to wipe it first).
+        # Create the database if it doesn't exist, such that we may fill it with data.
+        # It could be argued that we should delete any existing database from the server first.
+        # But I will ignore any such proposal for the foreseeable future.
+        self.db_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DATABASE_NAME}")  # Apparently can't pass DATABASE_NAME as a positional argument when creating a database ¯\_(ツ)_/¯
 
         # Run a command which will load the contents of a .sql file into an existing database.
-        # This seems to be the best we can do for now; ideally we would create it as well.
+        # This seems to be the best we can do for now; ideally we would create it with the same command.
 
-        restore_db_args = ('-h', '127.0.0.1', '-P', str(self.logindeets['port'])) \
-            if orm.database_location is DatabaseLocations.DOCKER else ('-h', self.logindeets['host'])
+        global container_name
 
-        try:
-            with open(f"database_backups/{DATABASE_NAME}{'(empty)' if not self.populate_db.get() else ''}.sql") as db_file:
-                # The following command populates the database according to the opened .sql file.
-                call(["mysql", "-u", "root", f"--password={self.logindeets['passwd']}", DATABASE_NAME, *restore_db_args], stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
-        except ProgrammingError as e:
-            print(f"Failed to restore database from {DATABASE_NAME}.sql; stating: '{e}',\ndoes the file exist?")
+        restore_database(self.logindeets, f"{DATABASE_NAME}{'(empty)' if not self.populate_db.get() else ''}.sql", container_name)
 
         self.db_cursor.execute(f"USE {DATABASE_NAME}")  # Use the database, regardless of how it was created.
 
@@ -175,10 +186,9 @@ class MainDBView(TkUtilWidget):
     """ This is the main widget that will be shown when a successful connection to the database has been made. """
 
     # Database connection details.
-    db_name: str = None
+    logindeets:dict = None
     db_cursor: CMySQLCursor = None
     db_connection: MySQLConnection = None
-    password: str = None
 
     # Widget details
     db_scrollview: VerticalScrolledFrame = None
@@ -194,11 +204,11 @@ class MainDBView(TkUtilWidget):
     initial_data = None  # Used to compare which rows needs to be updated in the database.
     queryset: List[DBModel] = None
 
-    def __init__(self, db_name:str, db_cursor:CMySQLCursor, db_connection:MySQLConnection, password:str, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
+    def __init__(self, logindeets:dict, db_cursor:CMySQLCursor, db_connection:MySQLConnection, screenName=None, baseName=None, className='Tk', useTk=1, sync=0, use=None):
         super().__init__(screenName, baseName, className, useTk, sync, use)
 
         # Make some assignments from provided or default variables.
-        self.db_name, self.db_cursor, self.db_connection, self.password = db_name, db_cursor, db_connection, password
+        self.logindeets, self.db_cursor, self.db_connection = logindeets, db_cursor, db_connection
         self.tablemodel, self.queryset = OrmTableModel(), []
 
         self.title(root_title)
@@ -224,14 +234,17 @@ class MainDBView(TkUtilWidget):
         self.actionframe = tk.Frame(self, highlightbackground="black", highlightthickness=1)
         self.actionframe.grid(column=0, row=3)
 
+        # A simple output log, which, amongst other things, shows executed statements.
+        self.outlog = OutputLog(self, height=10, width=70)
+
         # Buttons for the actions frame.
         SwitchViewModeButton(self.db_scrollview, self.actionframe, width=20).grid(column=0)
-        tk.Button(self.actionframe, width=20, text=f"Delete {self.db_name}", command=self._delete_database).grid(column=0)
-        self.commitbutton = tk.Button(self.actionframe, width=20, text=f"Commit to {self.db_name}", command=self._save)
+        tk.Button(self.actionframe, width=20, text=f"Delete {DATABASE_NAME}", command=self._delete_database).grid(column=0)
+        self.commitbutton = tk.Button(self.actionframe, width=20, text=f"Commit to {DATABASE_NAME}", command=self._save)
         self.commitbutton.grid(column=0)
         CreateToolTip(self.commitbutton, "Shows a summary of changes made in the table view,"
                                          "and asks if they should be committed to the database.")
-        tk.Button(self.actionframe, width=20, text=f"Backup of {self.db_name}", command=self._backup_database).grid(column=0)
+        tk.Button(self.actionframe, width=20, text=f"Backup of {DATABASE_NAME}", command=self._backup_database).grid(column=0)
         tk.Button(self.actionframe, width=20, text=f"Restore from backup", command=self._restore_database).grid(column=0)
         (logoutbutton := tk.Button(self.actionframe, width=20, text=f"Log out", command=self._log_out)).grid(column=0)
         CreateToolTip(logoutbutton, "Returns you to the login screen.")
@@ -240,8 +253,6 @@ class MainDBView(TkUtilWidget):
 
         tk.Label(self, text="Output Log").grid(column=2, row=2)
 
-        # A simple output log, which, amongst other things, shows executed statements.
-        self.outlog = OutputLog(self, height=10, width=70)
         self.outlog.grid(column=2, row=3)
 
     def _table_click(self, table_name: str, mode:ViewModes=ViewModes.TABLE):
@@ -274,8 +285,8 @@ class MainDBView(TkUtilWidget):
 
     def _delete_database(self):
         """ Runs when clicking the delete database button. """
-        if askyesno(f"delete '{self.db_name}'?", f"Are you sure you want to delete '{self.db_name}' from the server?"):
-            self.db_cursor.execute(f"DROP DATABASE {self.db_name}")
+        if askyesno(f"delete '{DATABASE_NAME}'?", f"Are you sure you want to delete '{DATABASE_NAME}' from the server?"):
+            self.db_cursor.execute(f"DROP DATABASE {DATABASE_NAME}")
             self.destroy(True)
 
     def _save(self):
@@ -317,7 +328,7 @@ class MainDBView(TkUtilWidget):
                 self.db_cursor.execute(command)
             self.db_connection.commit()
             changecount = len(deleted_rows) + len(new_rows) + len(update_rows)
-            self.outlog.insert(f"committed {changecount} change{'s' if changecount != 1 else ''} to {self.db_name}, at {datetime.now()}.")
+            self.outlog.insert(f"committed {changecount} change{'s' if changecount != 1 else ''} to {DATABASE_NAME}, at {datetime.now()}.")
             self.outlog.insert(_sql)
             self._table_click(table_name)  # Temporary solution to reset stored primary keys.
 
@@ -336,11 +347,11 @@ class MainDBView(TkUtilWidget):
     def _backup_database(self):
         """ Writes the current contents of the database to a corresponding file in the 'database_backups' directory. """
         with open(f"database_backups/{DATABASE_NAME}.sql", 'w+') as db_file:
-            call(["mysqldump", "-u", "root", f"--password={self.password}", DATABASE_NAME], stdin=DEVNULL, stdout=db_file, stderr=DEVNULL)
+            run(["mysqldump", "-u", "root", f"--password={self.logindeets['passwd']}", DATABASE_NAME], stdin=DEVNULL, stdout=db_file, stderr=DEVNULL)
 
     def _restore_database(self):
         """
         Restores the contents of the current database from a corresponding file in the 'database_backups' directory.
         """
-        with open(f"database_backups/{DATABASE_NAME}.sql", 'r+') as db_file:
-            call(["mysql", "-u", "root", f"--password={self.password}", DATABASE_NAME], stdin=db_file, stdout=db_file, stderr=DEVNULL)
+        global container_name
+        restore_database(self.logindeets, container_name=container_name)
