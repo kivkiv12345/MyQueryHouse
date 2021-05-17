@@ -303,6 +303,7 @@ def init_orm(model_overrides: dict=None) -> Dict[str, Type[DBModel]]:
 
     global Models  # Make a reference to the global Models dictionary.
 
+    CURSOR.execute(f"CREATE DATABASE IF NOT EXISTS {DATABASE_NAME}")
     CURSOR.execute(f"USE {DATABASE_NAME}")
     CURSOR.execute("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
     table_names = [table_tuple[0] for table_tuple in CURSOR]

@@ -1,14 +1,15 @@
 """
 Run this module to perform the preconfigured unit tests for MyQueryHouse.
 """
-from typing import Type
 
+import docker
 import unittest
+from typing import Type
 from resources import orm
 from docker.errors import NotFound
 from subprocess import call, DEVNULL
 from mysql.connector import connect
-from resources.utils import TempDockerContainer
+from resources.utils import TempDockerContainer, fixpath
 from resources.orm import DBModel, DATABASE_NAME, init_orm
 from resources.exceptions import AbstractInstantiationError
 from test_resources.test_subclass import MoreTestCases
@@ -49,18 +50,22 @@ class TestOrm(MoreTestCases):
             )
 
         with TempDockerContainer(container):
-            with open(f"database_backups/{DATABASE_NAME}(test).sql") as db_file:
-                # The following command populates the database according to the opened .sql file.
-                call(["mysql", "-u", "root", f"--password={PASSWORD}", DATABASE_NAME, '-h', '127.0.0.1', '-P', str(PORT)],
-                    stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
-
             with connect(
                 host='127.0.0.1',
                 user='root',
+                port=PORT,
                 password=PASSWORD,
             ) as connection:
                 with connection.cursor() as cursor:
                     orm.CONNECTION, orm.CURSOR = connection, cursor
+                    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DATABASE_NAME}")
+
+                    with open(fixpath(f"database_backups/{DATABASE_NAME}(test).sql")) as db_file:
+                        # The following command populates the database according to the opened .sql file.
+                        call(["docker", "exec", "-i", CONTAINER_NAME, "mysql", "-u", "root", f"--password={PASSWORD}",
+                              DATABASE_NAME],
+                             stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+
                     models = init_orm()
 
                     Category, Storage = models['Category'], models['Storage']

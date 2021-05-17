@@ -31,7 +31,7 @@ from datetime import datetime
 from tkinter.messagebox import askyesno
 from resources.widgets import VerticalScrolledFrame, OutputLog, SwitchViewModeButton, LoginModeWidget
 from resources.enums import ViewModes, DatabaseLocations
-from resources.utils import TkUtilWidget, OrmTableModel, CreateToolTip, restore_database
+from resources.utils import TkUtilWidget, OrmTableModel, CreateToolTip, restore_database, fixpath
 
 # VARS
 root_title = "MyQueryHouse | MySQL Connector Program"
@@ -129,7 +129,7 @@ class LoginBox(TkUtilWidget):
             docker.from_env()
         except DockerException as e:
             tk.messagebox.showerror("Docker connection failure", f"Could not retrieve a docker client, stating:\n{e}."
-                                                              f"\n\nIs Docker installed?")
+                                                              f"\n\nIs Docker installed and running?")
             # Seems like Entry widgets break when after showing an error, so we bail and exit the program.
             raise SystemExit("Exiting program due to a lacking docker installation.")
 
@@ -346,7 +346,7 @@ class MainDBView(TkUtilWidget):
 
     def _backup_database(self):
         """ Writes the current contents of the database to a corresponding file in the 'database_backups' directory. """
-        with open(f"database_backups/{DATABASE_NAME}.sql", 'w+') as db_file:
+        with open(fixpath(f"database_backups/{DATABASE_NAME}.sql"), 'w+') as db_file:
             run(["mysqldump", "-u", "root", f"--password={self.logindeets['passwd']}", DATABASE_NAME], stdin=DEVNULL, stdout=db_file, stderr=DEVNULL)
 
     def _restore_database(self):

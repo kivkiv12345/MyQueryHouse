@@ -163,7 +163,7 @@ class TempDockerContainer:
         self.container.start()
         if not self.container.attrs['State']['Running']:
             print(f"Waiting for container with name: '{self.container.name}' to start.")
-            sleep(5)
+            sleep(8)
         return self.container
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -178,6 +178,11 @@ class MockCMySQLCursor:
     """ Used to replace the existing CMySQLCursor when its import fails. Otherwise does nothing. """
 
 
+def fixpath(string:str) -> str:
+    """ Ensures that backslashes are used for Windows paths, and forward slashes for UNIX/Linux. """
+    return string.replace(*(('/', '\\') if os.name == 'nt' else ('\\', '/')))
+
+
 def restore_database(logindeets:dict, filename=DATABASE_NAME + '.sql', container_name:str = None) -> None:
     """
     Looks for a file in 'database_backups/', and uses it to restore the database on the server.
@@ -189,13 +194,8 @@ def restore_database(logindeets:dict, filename=DATABASE_NAME + '.sql', container
 
     restore_db_args = () if orm.database_location is DatabaseLocations.DOCKER else ('-h', logindeets['host'])
 
-    if os.name == 'nt':
-        filepath = os.getcwd() + "\\database_backups\\"
-    else:
-        filepath = "database_backups/"
-
     try:
-        with open(f"{filepath}{filename}") as db_file:
+        with open(fixpath(f"database_backups/{filename}")) as db_file:
             # The following command populates the database according to the opened .sql file.
             command = ["mysql", DATABASE_NAME, "-u", "root", f"--password={logindeets['passwd']}", *restore_db_args]
             if orm.database_location is DatabaseLocations.DOCKER:  # Execute inside the docker container, if applicable.
