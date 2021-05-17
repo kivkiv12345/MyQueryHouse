@@ -163,7 +163,7 @@ class TempDockerContainer:
         self.container.start()
         if not self.container.attrs['State']['Running']:
             print(f"Waiting for container with name: '{self.container.name}' to start.")
-            sleep(8)
+            sleep(15)
         return self.container
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -202,6 +202,12 @@ def restore_database(logindeets:dict, filename=DATABASE_NAME + '.sql', container
                 assert container_name, "Container name must be specified when using Docker"
                 command = ["docker", "exec", "-i", container_name] + command
             run(command, stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+
+            try:  # The above command currently fails on Linux, and this one requires that MySQL-client is installed.
+                command = ["mysql", DATABASE_NAME, "-u", "root", f"--password={logindeets['passwd']}", "-h", "127.0.0.1", "-P", str(logindeets['port'])]
+                run(command, stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+            except Exception:  # Fails when the MySQL-client is not installed.
+                pass
 
     except ProgrammingError as e:
         print(f"Failed to restore database from {filename}; stating: '{e}',\ndoes the file exist?")

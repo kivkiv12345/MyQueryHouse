@@ -24,7 +24,7 @@ from subprocess import DEVNULL, call, run
 from tkintertable import TableCanvas
 from frozendict import frozendict
 from copy import deepcopy
-from mysql.connector import ProgrammingError
+from mysql.connector import ProgrammingError, DatabaseError
 from resources import orm  # Module wide import needed to specify CONNECTION and CURSOR from orm.
 from resources.orm import Models, DBModel, QuerySet, DATABASE_NAME
 from datetime import datetime
@@ -37,6 +37,7 @@ from resources.utils import TkUtilWidget, OrmTableModel, CreateToolTip, restore_
 root_title = "MyQueryHouse | MySQL Connector Program"
 
 container_name: str = None
+
 
 # Classes
 class LoginBox(TkUtilWidget):
@@ -102,7 +103,7 @@ class LoginBox(TkUtilWidget):
                 container.start()  # Ensure that the container is started.
                 tk.Label(self, text="Please wait while we give the Docker container some time to start...").pack()
                 self.update()  # Force the window to update, such that our message will show.
-                sleep(8)
+                sleep(15)
 
         self.destroy(True)  # Destroy the window following confirmation and allow the program to continue.
 
@@ -244,8 +245,10 @@ class MainDBView(TkUtilWidget):
         self.commitbutton.grid(column=0)
         CreateToolTip(self.commitbutton, "Shows a summary of changes made in the table view,"
                                          "and asks if they should be committed to the database.")
-        tk.Button(self.actionframe, width=20, text=f"Backup of {DATABASE_NAME}", command=self._backup_database).grid(column=0)
-        tk.Button(self.actionframe, width=20, text=f"Restore from backup", command=self._restore_database).grid(column=0)
+        (backupbutton := tk.Button(self.actionframe, width=20, text=f"Backup of {DATABASE_NAME}", command=self._backup_database)).grid(column=0)
+        CreateToolTip(backupbutton, f"Saves the current content of the database to 'database_backups/{DATABASE_NAME}.sql'")
+        (restorebutton := tk.Button(self.actionframe, width=20, state=tk.DISABLED, text=f"Restore from backup", command=self._restore_database)).grid(column=0)
+        CreateToolTip(restorebutton, "Coming soon... maybe...")
         (logoutbutton := tk.Button(self.actionframe, width=20, text=f"Log out", command=self._log_out)).grid(column=0)
         CreateToolTip(logoutbutton, "Returns you to the login screen.")
 
@@ -324,11 +327,20 @@ class MainDBView(TkUtilWidget):
             self.outlog.insert('Canceled attempt to commit: Nothing to commit!')
         elif askyesno("Confirm statements", f"Do you want the following SQL to be executed on the database?:\n\n{_sql}"):
             #self.db_cursor.execute("; ".join(statements))
+
+            errors = 0
+
             for command in statements:
-                self.db_cursor.execute(command)
+                try:
+                    self.db_cursor.execute(command)
+                except (ProgrammingError, DatabaseError) as e:
+                    statements.remove(command)
+                    errors += 1
+                    self.outlog.insert(e.msg)
             self.db_connection.commit()
-            changecount = len(deleted_rows) + len(new_rows) + len(update_rows)
+            changecount = (len(deleted_rows) + len(new_rows) + len(update_rows)) - errors
             self.outlog.insert(f"committed {changecount} change{'s' if changecount != 1 else ''} to {DATABASE_NAME}, at {datetime.now()}.")
+            _sql = ";\n".join(statements)  # TODO Kevin: Refactor to reflect actual count of changes.
             self.outlog.insert(_sql)
             self._table_click(table_name)  # Temporary solution to reset stored primary keys.
 

@@ -121,7 +121,8 @@ class QuerySet:
         except Exception: pass
         current_table: str = self.model.Meta.table_name
         CURSOR.execute(f"SELECT * FROM {DATABASE_NAME}.{current_table}")
-        self._result = [Models[current_table](obj) for obj in CURSOR]
+        buffer = *(i for i in CURSOR),  # Buffer needed for certain tables for some reason.
+        self._result = [Models[current_table](obj) for obj in buffer]
         self._evaluated = True
         return self
 
@@ -155,6 +156,7 @@ class QuerySet:
 
     def create(self, **kwargs):
         """ Creates an instance of the specified model, saves it to the database, and returns it to the user. """
+        raise NotImplementedError("Create is not finished yet")
         invalid_field = next((field for field in kwargs.keys() if field not in self.model.values.keys()), None)
         if invalid_field: raise AttributeError(f"{invalid_field} is not a valid field for {self.model}.")
 

@@ -7,7 +7,7 @@ import unittest
 from typing import Type
 from resources import orm
 from docker.errors import NotFound
-from subprocess import call, DEVNULL
+from subprocess import call, DEVNULL, run
 from mysql.connector import connect
 from resources.utils import TempDockerContainer, fixpath
 from resources.orm import DBModel, DATABASE_NAME, init_orm
@@ -16,13 +16,6 @@ from test_resources.test_subclass import MoreTestCases
 
 
 class TestOrm(MoreTestCases):
-
-    """def test_upper(self):
-        self.assertEqual('foo'.upper(), 'FOO')
-
-    def test_isupper(self):
-        self.assertTrue('FOO'.isupper())
-        self.assertFalse('Foo'.isupper())"""
 
     def test_docker(self):
         """ Instantiates a MySQL Docker container mock database, to run unit tests against. """
@@ -65,6 +58,12 @@ class TestOrm(MoreTestCases):
                         call(["docker", "exec", "-i", CONTAINER_NAME, "mysql", "-u", "root", f"--password={PASSWORD}",
                               DATABASE_NAME],
                              stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+
+                        try:  # The above command currently fails on Linux, and this one requires that MySQL-client is installed.
+                            run(["mysql", DATABASE_NAME, "-u", "root", f"--password={PASSWORD}", "-h",
+                                       "127.0.0.1", "-P", str(PORT)], stdin=db_file, stdout=DEVNULL, stderr=DEVNULL)
+                        except Exception:  # Fails when the MySQL-client is not installed.
+                            pass
 
                     models = init_orm()
 

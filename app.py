@@ -92,7 +92,7 @@ if __name__ == '__main__':
             '__str__': dbmodel_str,
         })
 
-        root = MainDBView(login.logindeets, orm.CURSOR, orm.CONNECTION, login.logindeets["passwd"])
+        root = MainDBView(login.logindeets, orm.CURSOR, orm.CONNECTION)
 
         root.mainloop()
 
