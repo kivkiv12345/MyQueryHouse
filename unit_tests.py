@@ -6,7 +6,7 @@ import docker
 import unittest
 from typing import Type
 from resources import orm
-from docker.errors import NotFound
+from docker.errors import NotFound, DockerException
 from subprocess import call, DEVNULL, run
 from mysql.connector import connect
 from resources.utils import TempDockerContainer, fixpath
@@ -23,7 +23,12 @@ class TestOrm(MoreTestCases):
         # TODO Kevin: Some refactoring may be in order here. Destruction of unit test resources raises ResourceWarning;
         #   stating: unclosed socket. This may hint at needed changes to an __exit__ method somewhere.
 
-        client = docker.from_env()
+        try:  # Attempt to retrieve a Docker client from the computer. 
+            client = docker.from_env()
+        except DockerException as e:  # Hint as to how to fix the error.
+            print("Is docker installed and running?")
+            raise e
+
         client.images.pull('mysql')  # Ensure that the image is pulled.
 
         CONTAINER_NAME = DATABASE_NAME + '_test_db'
